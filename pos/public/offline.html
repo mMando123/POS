@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1565C0">
+    <title>غير متصل - نظام نقاط البيع</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #0D47A1 0%, #1565C0 50%, #1976D2 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 420px;
+        }
+
+        .icon {
+            font-size: 80px;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        p {
+            font-size: 16px;
+            opacity: 0.85;
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+
+        .retry-btn {
+            display: inline-block;
+            padding: 14px 36px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .retry-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .status {
+            margin-top: 20px;
+            font-size: 13px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="icon">📡</div>
+        <h1>أنت غير متصل بالإنترنت</h1>
+        <p>
+            لا يمكن الوصول للخادم حالياً.<br>
+            تحقق من اتصال الشبكة وأعد المحاولة.
+        </p>
+        <button class="retry-btn" onclick="window.location.reload()">
+            🔄 إعادة المحاولة
+        </button>
+        <div class="status" id="status">آخر محاولة: جاري التحقق...</div>
+    </div>
+    <script>
+        const statusEl = document.getElementById('status');
+        const now = new Date().toLocaleTimeString('ar-SA');
+        statusEl.textContent = `آخر محاولة: ${now}`;
+
+        // Auto-retry when connection comes back
+        window.addEventListener('online', () => {
+            statusEl.textContent = '✅ تم استعادة الاتصال — جاري إعادة التحميل...';
+            setTimeout(() => window.location.reload(), 1500);
+        });
+    </script>
+</body>
+
+</html>

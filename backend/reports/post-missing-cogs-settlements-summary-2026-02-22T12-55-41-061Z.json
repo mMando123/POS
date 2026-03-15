@@ -1,0 +1,14 @@
+{
+  "proposal_file": "C:\\Users\\activ\\Desktop\\pos\\backend\\reports\\missing-cogs-settlement-proposals-2026-02-22T12-53-31-323Z.json",
+  "mode": "dry-run",
+  "totals": {
+    "proposals_in_file": 2,
+    "candidates": 0,
+    "scanned": 0,
+    "posted": 0,
+    "skipped_existing": 0,
+    "failed": 0,
+    "total_posted_amount": 0
+  },
+  "errors": []
+}

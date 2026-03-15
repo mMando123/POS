@@ -1,0 +1,108 @@
+{
+    "tech_stack": [
+        "JavaScript",
+        "Node.js",
+        "Express.js",
+        "SQLite",
+        "Sequelize ORM",
+        "JWT",
+        "Socket.io"
+    ],
+    "features": [
+        {
+            "name": "Authentication API",
+            "description": "User authentication with JWT tokens, login/logout functionality",
+            "files": [
+                "backend/src/routes/auth.js",
+                "backend/src/middleware/auth.js"
+            ],
+            "api_doc": {
+                "openapi": "3.0.0",
+                "paths": {
+                    "/api/auth/login": {
+                        "post": {
+                            "summary": "User login",
+                            "requestBody": {
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "username": {
+                                                    "type": "string"
+                                                },
+                                                "password": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "Orders API",
+            "description": "Create, read, update orders with status management",
+            "files": [
+                "backend/src/routes/order.js",
+                "backend/src/models/Order.js"
+            ],
+            "api_doc": {
+                "openapi": "3.0.0",
+                "paths": {
+                    "/api/orders": {
+                        "get": {
+                            "summary": "Get all orders"
+                        },
+                        "post": {
+                            "summary": "Create new order"
+                        }
+                    },
+                    "/api/orders/{id}": {
+                        "get": {
+                            "summary": "Get order by ID"
+                        },
+                        "patch": {
+                            "summary": "Update order status"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "Menu API",
+            "description": "Menu items CRUD operations with categories",
+            "files": [
+                "backend/src/routes/menu.js",
+                "backend/src/models/Menu.js"
+            ]
+        },
+        {
+            "name": "Users API",
+            "description": "User management for admin",
+            "files": [
+                "backend/src/routes/users.js",
+                "backend/src/models/User.js"
+            ]
+        },
+        {
+            "name": "Shifts API",
+            "description": "Shift management and cashier performance tracking",
+            "files": [
+                "backend/src/routes/shifts.js",
+                "backend/src/models/Shift.js"
+            ]
+        },
+        {
+            "name": "Reports API",
+            "description": "Sales and analytics reports",
+            "files": [
+                "backend/src/routes/reports.js"
+            ]
+        }
+    ]
+}

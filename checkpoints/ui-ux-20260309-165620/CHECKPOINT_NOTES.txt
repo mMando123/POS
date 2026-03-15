@@ -1,0 +1,9 @@
+﻿UI/UX checkpoint
+Created: 2026-03-09 16:56:21
+Files:
+- pos/src/pages/Dashboard.jsx
+- pos/src/components/Layout.jsx
+- pos/src/components/MobileBottomNav.jsx
+Restore tips:
+1) Copy files back to original paths.
+2) Run: cd pos && npm run build

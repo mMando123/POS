@@ -1,0 +1,741 @@
+{
+  "created_at": "2026-03-03T00:30:06.464Z",
+  "migration_type": "erpnext-style-restructure",
+  "database_dialect": "mysql",
+  "accounts": {
+    "total": 33,
+    "active": 33,
+    "groups": 7,
+    "ledgers": 26,
+    "by_type": {
+      "null": 9,
+      "Cash": 2,
+      "Bank": 2,
+      "Receivable": 1,
+      "Stock": 1,
+      "Tax": 2,
+      "Payable": 1,
+      "Equity": 2,
+      "Income Account": 3,
+      "Cost of Goods Sold": 1,
+      "Expense Account": 9
+    },
+    "data": [
+      {
+        "id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "code": "1000",
+        "name_ar": "الأصول",
+        "name_en": "Assets",
+        "account_type": null,
+        "normal_balance": "debit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": null,
+        "current_balance": "0.00"
+      },
+      {
+        "id": "38b0e75e-4cdf-426e-b332-9aa877c78d44",
+        "code": "1001",
+        "name_ar": "الصندوق (نقدي)",
+        "name_en": "Cash",
+        "account_type": "Cash",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "d39f945c-9ccc-4814-829e-abd49a7b51fc",
+        "code": "1002",
+        "name_ar": "البنك",
+        "name_en": "Bank",
+        "account_type": "Bank",
+        "normal_balance": "debit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "532d4f21-c82b-49be-bd0e-f2f3eacf6a71",
+        "code": "1002-01",
+        "name_ar": "cib",
+        "name_en": "cib",
+        "account_type": "Bank",
+        "normal_balance": "debit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "d39f945c-9ccc-4814-829e-abd49a7b51fc",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "c4558d44-ccef-4a86-832f-91c42230beb5",
+        "code": "1003",
+        "name_ar": "العملاء (مدينون)",
+        "name_en": "Accounts Receivable",
+        "account_type": "Receivable",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "e5e9e60a-98a3-4d6b-b04e-bcc64388a3f2",
+        "code": "1005",
+        "name_ar": "عهدة صندوق (صرفية)",
+        "name_en": "Cash Drawer Float",
+        "account_type": "Cash",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "20f237d1-eae7-486c-8261-93e9ab5f60a6",
+        "code": "1100",
+        "name_ar": "المخزون",
+        "name_en": "Inventory",
+        "account_type": "Stock",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "9.00"
+      },
+      {
+        "id": "fbc30a2d-4cad-4bf7-9e44-8a0e5d048528",
+        "code": "1105",
+        "name_ar": "وسيط تحويلات بين الفروع",
+        "name_en": "Inter-branch Clearing",
+        "account_type": null,
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "12056914-d399-4f9a-8956-819bde90bef7",
+        "code": "1300",
+        "name_ar": "ضريبة القيمة المضافة (مدخلات)",
+        "name_en": "Input VAT",
+        "account_type": "Tax",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "1.35"
+      },
+      {
+        "id": "f07f4688-f1e5-4847-8324-992bc6068835",
+        "code": "1400",
+        "name_ar": "دفعات مقدمة للموردين",
+        "name_en": "Advance Payments to Suppliers",
+        "account_type": null,
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "99babe18-41d0-4535-a981-f5f87dccacf1",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "134f5640-45ed-442f-b83f-155f18098d13",
+        "code": "2000",
+        "name_ar": "الالتزامات",
+        "name_en": "Liabilities",
+        "account_type": null,
+        "normal_balance": "credit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": null,
+        "current_balance": "0.00"
+      },
+      {
+        "id": "5d69ce03-8ecf-4d95-948e-c0cf413db9b0",
+        "code": "2001",
+        "name_ar": "ودائع العملاء",
+        "name_en": "Customer Deposits",
+        "account_type": null,
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "134f5640-45ed-442f-b83f-155f18098d13",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "8104357e-9c87-48bf-a402-966720d90891",
+        "code": "2002",
+        "name_ar": "الذمم الدائنة للموردين",
+        "name_en": "Accounts Payable",
+        "account_type": "Payable",
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "134f5640-45ed-442f-b83f-155f18098d13",
+        "current_balance": "10.35"
+      },
+      {
+        "id": "68145117-d8db-4e92-b75b-373db690246b",
+        "code": "2100",
+        "name_ar": "ضريبة القيمة المضافة مستحقة (مخرجات)",
+        "name_en": "Output VAT Payable",
+        "account_type": "Tax",
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "134f5640-45ed-442f-b83f-155f18098d13",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "b79ac87d-7acb-4201-8edb-72a8617094dd",
+        "code": "2200",
+        "name_ar": "رواتب مستحقة الدفع",
+        "name_en": "Accrued Salaries Payable",
+        "account_type": null,
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "134f5640-45ed-442f-b83f-155f18098d13",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "954836cf-275e-4679-85a6-88a24fccd443",
+        "code": "3000",
+        "name_ar": "حقوق الملكية",
+        "name_en": "Equity",
+        "account_type": null,
+        "normal_balance": "credit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": null,
+        "current_balance": "0.00"
+      },
+      {
+        "id": "0477bb55-4bba-4f62-9a84-917d8f071ab2",
+        "code": "3001",
+        "name_ar": "رأس مال المالك",
+        "name_en": "Owner Capital",
+        "account_type": "Equity",
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "954836cf-275e-4679-85a6-88a24fccd443",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "681440a4-3149-4b9c-8d8b-ee4608fda6f1",
+        "code": "3002",
+        "name_ar": "الأرباح المحتجزة",
+        "name_en": "Retained Earnings",
+        "account_type": "Equity",
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "954836cf-275e-4679-85a6-88a24fccd443",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "dbad2d88-dfdc-4690-9048-68cd66d476cd",
+        "code": "4000",
+        "name_ar": "الإيرادات",
+        "name_en": "Income",
+        "account_type": null,
+        "normal_balance": "credit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": null,
+        "current_balance": "0.00"
+      },
+      {
+        "id": "b8b51f16-f89b-4e2e-9f16-e1e16941b864",
+        "code": "4001",
+        "name_ar": "إيرادات المبيعات",
+        "name_en": "Sales Revenue",
+        "account_type": "Income Account",
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "dbad2d88-dfdc-4690-9048-68cd66d476cd",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "c731bd6f-bb7d-433b-8074-8a4461ea3cb5",
+        "code": "4002",
+        "name_ar": "الخصومات الممنوحة",
+        "name_en": "Discounts Given",
+        "account_type": "Income Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "dbad2d88-dfdc-4690-9048-68cd66d476cd",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "da17937f-9aaf-45b0-9dac-c45174a068f2",
+        "code": "4100",
+        "name_ar": "إيرادات أخرى",
+        "name_en": "Other Income",
+        "account_type": "Income Account",
+        "normal_balance": "credit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "dbad2d88-dfdc-4690-9048-68cd66d476cd",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "code": "5000",
+        "name_ar": "المصروفات",
+        "name_en": "Expenses",
+        "account_type": null,
+        "normal_balance": "debit",
+        "is_group": 1,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": null,
+        "current_balance": "0.00"
+      },
+      {
+        "id": "63845947-2886-427b-b77b-aee4696cde83",
+        "code": "5001",
+        "name_ar": "تكلفة البضاعة المباعة",
+        "name_en": "Cost of Goods Sold",
+        "account_type": "Cost of Goods Sold",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "d00e8957-010d-4223-9ca2-67682fc2e6e3",
+        "code": "5002",
+        "name_ar": "خسائر المرتجعات",
+        "name_en": "Refund Losses",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "18df3555-aaea-420d-a8c8-fdc972f8d3b8",
+        "code": "5003",
+        "name_ar": "عجز الصندوق",
+        "name_en": "Cash Shortage/Overage",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "98d5671e-353b-4dfd-9e3d-c3d328a52f9f",
+        "code": "5004",
+        "name_ar": "هبوط المخزون",
+        "name_en": "Inventory Shrinkage",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "e65f59ea-2544-48aa-b6f5-2d4a4035114f",
+        "code": "5100",
+        "name_ar": "مصروفات عامة وإدارية",
+        "name_en": "General & Administrative Expenses",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 1,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "0a34bd26-7bed-4f1c-8920-1a2565a5c870",
+        "code": "5101",
+        "name_ar": "مصروف الرواتب والأجور",
+        "name_en": "Salaries & Wages Expense",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "575892a7-3118-4bf8-87b4-4800dab31045",
+        "code": "5102",
+        "name_ar": "مصروف الإيجار",
+        "name_en": "Rent Expense",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "fb438c14-2dc7-4fc0-9d82-eaf585c79b4f",
+        "code": "5103",
+        "name_ar": "مصروف الخدمات (كهرباء / ماء)",
+        "name_en": "Utilities Expense",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "18bfd28f-f99b-42ff-b59f-aff81dd5b2ae",
+        "code": "5104",
+        "name_ar": "مصروف التسويق والإعلان",
+        "name_en": "Marketing & Advertising Expense",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      },
+      {
+        "id": "a74addc8-ba0a-4b51-b02c-3919554415d0",
+        "code": "5105",
+        "name_ar": "مصروف الصيانة",
+        "name_en": "Maintenance & Repairs Expense",
+        "account_type": "Expense Account",
+        "normal_balance": "debit",
+        "is_group": 0,
+        "is_active": 1,
+        "is_system": 0,
+        "parent_id": "1cae3d5b-6371-488f-8804-d50599a0027e",
+        "current_balance": "0.00"
+      }
+    ]
+  },
+  "journal_entries": {
+    "total": 1,
+    "by_source_and_status": [
+      {
+        "source_type": "purchase_receipt",
+        "status": "posted",
+        "count": "1",
+        "total_amount": "10.35"
+      }
+    ]
+  },
+  "account_defaults": {
+    "total": 26,
+    "data": [
+      {
+        "account_key": "default_cogs_account",
+        "account_id": "63845947-2886-427b-b77b-aee4696cde83",
+        "account_code": "5001",
+        "account_name": "تكلفة البضاعة المباعة",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_general_expense_account",
+        "account_id": "e65f59ea-2544-48aa-b6f5-2d4a4035114f",
+        "account_code": "5100",
+        "account_name": "مصروفات عامة وإدارية",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_utilities_expense_account",
+        "account_id": "fb438c14-2dc7-4fc0-9d82-eaf585c79b4f",
+        "account_code": "5103",
+        "account_name": "مصروف الخدمات (كهرباء / ماء)",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_cash_shortage_account",
+        "account_id": "18df3555-aaea-420d-a8c8-fdc972f8d3b8",
+        "account_code": "5003",
+        "account_name": "عجز الصندوق",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_input_vat_account",
+        "account_id": "12056914-d399-4f9a-8956-819bde90bef7",
+        "account_code": "1300",
+        "account_name": "ضريبة القيمة المضافة (مدخلات)",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_capital_account",
+        "account_id": "0477bb55-4bba-4f62-9a84-917d8f071ab2",
+        "account_code": "3001",
+        "account_name": "رأس مال المالك",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_clearing_account",
+        "account_id": "fbc30a2d-4cad-4bf7-9e44-8a0e5d048528",
+        "account_code": "1105",
+        "account_name": "وسيط تحويلات بين الفروع",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_customer_deposit_account",
+        "account_id": "5d69ce03-8ecf-4d95-948e-c0cf413db9b0",
+        "account_code": "2001",
+        "account_name": "ودائع العملاء",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_receivable_account",
+        "account_id": "c4558d44-ccef-4a86-832f-91c42230beb5",
+        "account_code": "1003",
+        "account_name": "العملاء (مدينون)",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_retained_earnings_account",
+        "account_id": "681440a4-3149-4b9c-8d8b-ee4608fda6f1",
+        "account_code": "3002",
+        "account_name": "الأرباح المحتجزة",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_cash_account",
+        "account_id": "38b0e75e-4cdf-426e-b332-9aa877c78d44",
+        "account_code": "1001",
+        "account_name": "الصندوق (نقدي)",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_accrued_expenses_account",
+        "account_id": "b79ac87d-7acb-4201-8edb-72a8617094dd",
+        "account_code": "2200",
+        "account_name": "رواتب مستحقة الدفع",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_salaries_expense_account",
+        "account_id": "0a34bd26-7bed-4f1c-8920-1a2565a5c870",
+        "account_code": "5101",
+        "account_name": "مصروف الرواتب والأجور",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_refund_expense_account",
+        "account_id": "d00e8957-010d-4223-9ca2-67682fc2e6e3",
+        "account_code": "5002",
+        "account_name": "خسائر المرتجعات",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_stock_in_hand_account",
+        "account_id": "20f237d1-eae7-486c-8261-93e9ab5f60a6",
+        "account_code": "1100",
+        "account_name": "المخزون",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_other_income_account",
+        "account_id": "da17937f-9aaf-45b0-9dac-c45174a068f2",
+        "account_code": "4100",
+        "account_name": "إيرادات أخرى",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_drawer_float_account",
+        "account_id": "e5e9e60a-98a3-4d6b-b04e-bcc64388a3f2",
+        "account_code": "1005",
+        "account_name": "عهدة صندوق (صرفية)",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_income_account",
+        "account_id": "b8b51f16-f89b-4e2e-9f16-e1e16941b864",
+        "account_code": "4001",
+        "account_name": "إيرادات المبيعات",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_shrinkage_account",
+        "account_id": "98d5671e-353b-4dfd-9e3d-c3d328a52f9f",
+        "account_code": "5004",
+        "account_name": "هبوط المخزون",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_payable_account",
+        "account_id": "8104357e-9c87-48bf-a402-966720d90891",
+        "account_code": "2002",
+        "account_name": "الذمم الدائنة للموردين",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_discount_account",
+        "account_id": "c731bd6f-bb7d-433b-8074-8a4461ea3cb5",
+        "account_code": "4002",
+        "account_name": "الخصومات الممنوحة",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_maintenance_expense_account",
+        "account_id": "a74addc8-ba0a-4b51-b02c-3919554415d0",
+        "account_code": "5105",
+        "account_name": "مصروف الصيانة",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_rent_expense_account",
+        "account_id": "575892a7-3118-4bf8-87b4-4800dab31045",
+        "account_code": "5102",
+        "account_name": "مصروف الإيجار",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_advance_payment_account",
+        "account_id": "f07f4688-f1e5-4847-8324-992bc6068835",
+        "account_code": "1400",
+        "account_name": "دفعات مقدمة للموردين",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_marketing_expense_account",
+        "account_id": "18bfd28f-f99b-42ff-b59f-aff81dd5b2ae",
+        "account_code": "5104",
+        "account_name": "مصروف التسويق والإعلان",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      },
+      {
+        "account_key": "default_output_vat_account",
+        "account_id": "68145117-d8db-4e92-b75b-373db690246b",
+        "account_code": "2100",
+        "account_name": "ضريبة القيمة المضافة مستحقة (مخرجات)",
+        "company_id": null,
+        "branch_id": null,
+        "is_active": 1
+      }
+    ]
+  },
+  "fiscal_periods": {
+    "total": 0,
+    "data": []
+  },
+  "branches": {
+    "total": 4,
+    "data": [
+      {
+        "id": "4e3bd5d8-73c2-4424-a74b-31f03c214d44",
+        "name_ar": "الفرع الرئيسي",
+        "name_en": "Main Branch",
+        "is_active": 1
+      },
+      {
+        "id": "5e50fb31-557a-45b1-95bd-dc259f57d492",
+        "name_ar": "الفرع الرئيسي",
+        "name_en": "Main Branch",
+        "is_active": 1
+      },
+      {
+        "id": "82949f2e-e10c-49c0-9239-6ccc116a90bf",
+        "name_ar": "الفرع الرئيسي",
+        "name_en": "Main Branch",
+        "is_active": 1
+      },
+      {
+        "id": "ae3abfb0-62c6-4ffd-b2a2-ae72db938b8a",
+        "name_ar": "الفرع الرئيسي",
+        "name_en": "Main Branch",
+        "is_active": 1
+      }
+    ]
+  },
+  "journal_lines": {
+    "total": 3
+  }
+}

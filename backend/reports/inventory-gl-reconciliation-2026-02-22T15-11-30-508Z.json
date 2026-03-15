@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-02-22T15:11:30.507Z",
+  "mode": "dry-run",
+  "entry_date": "2026-02-22",
+  "accounts": {
+    "inventory": "1100",
+    "counterpart": "3002"
+  },
+  "materiality": 0.01,
+  "snapshot": {
+    "inventoryGL": 3035.36,
+    "stockValuation": 3975.36,
+    "gap": -940
+  },
+  "requires_adjustment": true,
+  "adjustment": {
+    "direction": "inventory_understated_in_gl",
+    "amount": 940,
+    "lines": [
+      {
+        "accountCode": "1100",
+        "debit": 940,
+        "credit": 0,
+        "description": "Inventory reconciliation adjustment (increase inventory to match stock valuation)"
+      },
+      {
+        "accountCode": "3002",
+        "debit": 0,
+        "credit": 940,
+        "description": "Counterpart for inventory reconciliation adjustment"
+      }
+    ]
+  },
+  "posted": false,
+  "entry_number": null,
+  "notes": "Historical inventory reconciliation between stock valuation and GL inventory account."
+}

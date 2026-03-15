@@ -1,0 +1,1 @@
+mysqldump -h localhost -P 3306 -u root -p"Mando123@#" pos_restaurant > reports/backup_pos_restaurant_2026-02-23T10-43-00-137Z.sql

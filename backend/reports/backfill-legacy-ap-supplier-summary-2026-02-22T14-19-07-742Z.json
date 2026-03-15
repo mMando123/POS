@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-02-22T14:19:07.740Z",
+  "mode": "dry-run",
+  "legacy_supplier_code": "SUP-LEGACY",
+  "totals": {
+    "scanned": 0,
+    "updatable": 0,
+    "updated_entries": 0,
+    "updated_source_docs": 0,
+    "legacy_assigned": 0,
+    "failed": 0
+  },
+  "details": [],
+  "errors": [],
+  "synced_suppliers": []
+}

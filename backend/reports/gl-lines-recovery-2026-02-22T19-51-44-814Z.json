@@ -1,0 +1,77 @@
+{
+  "executedAt": "2026-02-22T19:51:43.876Z",
+  "mode": "dry-run",
+  "before": {
+    "totalEntries": 231,
+    "totalLines": 568,
+    "orphanEntries": 0
+  },
+  "rebuildFromAudit": {
+    "candidates": 0,
+    "rebuiltEntries": 0,
+    "rebuiltLines": 0,
+    "errors": []
+  },
+  "deletedOrphanHeaders": {
+    "total": 0,
+    "byType": {}
+  },
+  "recreateOrdersAndReceipts": {
+    "orders": {
+      "skipped": true
+    },
+    "purchaseReceipts": {
+      "skipped": true
+    }
+  },
+  "recreatePurchaseReturns": {
+    "total": 0,
+    "recreated": 0,
+    "missingSource": 0,
+    "errors": []
+  },
+  "recreateSupplierPayments": {
+    "total": 0,
+    "recreated": 0,
+    "missingSource": 0,
+    "errors": []
+  },
+  "recreateShiftEntries": {
+    "total": 0,
+    "recreated": 0,
+    "missingSource": 0,
+    "errors": []
+  },
+  "recreateExpenseEntries": {
+    "total": 0,
+    "recreated": 0,
+    "errors": []
+  },
+  "postMaintenance": {
+    "skipped": true
+  },
+  "after": {
+    "totalEntries": 231,
+    "totalLines": 568,
+    "orphanEntries": 0
+  },
+  "validation": {
+    "counts": {
+      "totalEntries": 231,
+      "totalLines": 568,
+      "orphanEntries": 0
+    },
+    "trialBalance": {
+      "totalDebits": 0,
+      "totalCredits": 0,
+      "isBalanced": false,
+      "accountsCount": 11
+    },
+    "profitAndLoss": {
+      "revenue": 0,
+      "cogs": 2210.1,
+      "grossProfit": 18004696.9,
+      "netIncome": 18004606.9
+    }
+  }
+}

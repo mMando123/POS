@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-02-22T14:15:59.037Z",
+  "mode": "dry-run",
+  "legacy_supplier_code": "SUP-LEGACY",
+  "totals": {
+    "scanned": 10,
+    "updatable": 10,
+    "updated_entries": 0,
+    "updated_source_docs": 0,
+    "legacy_assigned": 10,
+    "failed": 0
+  },
+  "details": [
+    {
+      "entry_number": "JE-2026-000001",
+      "source_type": "purchase_receipt",
+      "source_id": "5ca8ace6-c083-459b-83b9-0f15357c71d7",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000003",
+      "source_type": "purchase_receipt",
+      "source_id": "a44cc70a-7d6d-4244-841e-cadb0c376ebd",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000004",
+      "source_type": "purchase_receipt",
+      "source_id": "9bdb79ef-f560-43c7-a7b1-10cf002d6c64",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000008",
+      "source_type": "purchase_receipt",
+      "source_id": "d71308ca-9d2b-4d54-ba2d-e92a731f0f3a",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000115",
+      "source_type": "purchase_receipt",
+      "source_id": "543a7370-6ac1-4612-80b0-708149042583",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000116",
+      "source_type": "purchase_receipt",
+      "source_id": "9d2810f7-2051-4814-bda9-cadbbeb65fa4",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000117",
+      "source_type": "purchase_receipt",
+      "source_id": "58bbddeb-753a-465c-8676-eba3766cf344",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000118",
+      "source_type": "purchase_receipt",
+      "source_id": "299466d7-cb34-4559-a560-e76a2dfe99f9",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000119",
+      "source_type": "purchase_receipt",
+      "source_id": "16d4a42d-6780-4346-875d-5c7edea6d123",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    },
+    {
+      "entry_number": "JE-2026-000120",
+      "source_type": "purchase_receipt",
+      "source_id": "aab23c9e-7fff-4606-88a2-c2a3d79be507",
+      "supplier_id": "c7161ca2-a917-4fa1-acd1-773ffa59933a",
+      "resolution_reason": "legacy_fallback"
+    }
+  ],
+  "errors": [],
+  "synced_suppliers": []
+}

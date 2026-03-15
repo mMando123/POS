@@ -1,0 +1,37 @@
+{
+  "name": "restaurant-app",
+  "version": "1.0.0",
+  "description": "Restaurant Management System - Online Ordering, POS, and KDS",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "shared"
+  ],
+    "scripts": {
+      "backend:dev": "npm run dev --workspace=backend",
+      "backend:start": "npm run start --workspace=backend",
+      "backend:sku:backfill": "npm run sku:backfill --workspace=backend --",
+      "hr:sync:staff": "npm run hr:sync:staff --workspace=backend",
+      "dev:mobile": "node scripts/dev-mobile-stack.cjs",
+    "install:all": "npm install && cd pos && npm install && cd ../website && npm install && cd ../kds && npm install",
+    "build:pos": "cd pos && npm run build",
+    "start:prod": "pm2 start ecosystem.config.js",
+    "stop:prod": "pm2 stop ecosystem.config.js",
+    "restart:prod": "pm2 restart ecosystem.config.js",
+    "logs:prod": "pm2 logs"
+  },
+  "keywords": [
+    "restaurant",
+    "pos",
+    "ordering",
+    "arabic"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pm2": "^6.0.14",
+    "serve": "^14.2.5",
+    "stylis": "^4.3.6",
+    "stylis-plugin-rtl": "^2.1.1"
+  }
+}

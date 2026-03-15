@@ -1,0 +1,1 @@
+order_id,order_number,branch_id,payment_status,completed_at,order_total,proposed_cogs_amount,method,confidence,anomaly_flag,ratio_used_percent,estimation_method,costed_items,missing_cost_items,cogs_account,inventory_account,note

@@ -1,0 +1,333 @@
+﻿import { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { PermissionGate, PERMISSIONS } from '../components/ProtectedRoute'
+import {
+    Box,
+    Card,
+    CardContent,
+    Typography,
+    Chip,
+    Button,
+    Grid,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Tabs,
+    Tab,
+    IconButton,
+} from '@mui/material'
+import { Refresh, Visibility, Undo as RefundIcon } from '@mui/icons-material'
+import toast from 'react-hot-toast'
+import { orderAPI } from '../services/api'
+import { setOrders, updateOrderStatus } from '../store/slices/orderSlice'
+import RefundDialog from '../components/RefundDialog'
+
+const statusColors = {
+    pending: 'warning',
+    approved: 'info',
+    new: 'info',
+    confirmed: 'info',
+    preparing: 'warning',
+    ready: 'success',
+    handed_to_cashier: 'primary',
+    completed: 'default',
+    cancelled: 'error',
+}
+
+const statusLabels = {
+    pending: 'Ø§Ù†ØªØ¸Ø§Ø± Ø§Ù„Ù…ÙˆØ§ÙÙ‚Ø©',
+    approved: 'ØªÙ… Ø§Ù„Ù‚Ø¨ÙˆÙ„',
+    new: 'Ø¬Ø¯ÙŠØ¯',
+    confirmed: 'Ù…Ø¤ÙƒØ¯',
+    preparing: 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ø¶ÙŠØ±',
+    ready: 'Ø¬Ø§Ù‡Ø² Ù„Ù„ØªØ³Ù„ÙŠÙ…',
+    handed_to_cashier: 'Ù„Ø¯Ù‰ Ø§Ù„ÙƒØ§Ø´ÙŠØ±',
+    completed: 'Ù…ÙƒØªÙ…Ù„',
+    cancelled: 'Ù…Ù„ØºÙŠ',
+}
+
+export default function Orders() {
+    const dispatch = useDispatch()
+    const { orders, loading } = useSelector((state) => state.orders)
+    const [selectedOrder, setSelectedOrder] = useState(null)
+    const [tab, setTab] = useState(0)
+    const [refundOrder, setRefundOrder] = useState(null)
+    const { user } = useSelector((state) => state.auth)
+
+    useEffect(() => {
+        fetchOrders()
+    }, [])
+
+    const fetchOrders = async () => {
+        try {
+            const response = await orderAPI.getAll({ limit: 100 })
+            dispatch(setOrders(response.data.data || []))
+        } catch (error) {
+            toast.error('ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø·Ù„Ø¨Ø§Øª')
+        }
+    }
+
+    const handleStatusChange = async (orderId, newStatus) => {
+        try {
+            // Use specific endpoints for workflow actions if needed, or generic update
+            if (newStatus === 'approved') {
+                await orderAPI.approve(orderId)
+            } else if (newStatus === 'handed_to_cashier') {
+                await orderAPI.handoff(orderId)
+            } else if (newStatus === 'completed') {
+                await orderAPI.complete(orderId)
+            } else {
+                await orderAPI.updateStatus(orderId, newStatus)
+            }
+
+            dispatch(updateOrderStatus({ orderId, status: newStatus }))
+            toast.success(`ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ø§Ù„Ø© Ø¥Ù„Ù‰: ${statusLabels[newStatus]}`)
+        } catch (error) {
+            console.error(error)
+            toast.error(error.response?.data?.message || 'ÙØ´Ù„ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ø§Ù„Ø©')
+        }
+    }
+
+    const getNextStatus = (order) => {
+        const s = order.status
+        // Online Orders
+        if (order.order_type === 'online') {
+            if (s === 'pending') return 'approved'
+            if (s === 'approved') return 'preparing'
+        }
+
+        // POS / Common
+        if (s === 'new') return 'preparing'
+        if (s === 'confirmed') return 'preparing' // Legacy support
+        if (s === 'preparing') return 'ready'
+        if (s === 'ready') return 'handed_to_cashier'
+        if (s === 'handed_to_cashier') return 'completed'
+
+        return null
+    }
+
+    const handleCancelOrder = async (orderId) => {
+        if (!window.confirm('Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ù„ØºØ§Ø¡ Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨ØŸ')) {
+            return
+        }
+        try {
+            await orderAPI.cancel(orderId, 'Ø¥Ù„ØºØ§Ø¡ Ù…Ù† ØµÙØ­Ø© Ø§Ù„Ø·Ù„Ø¨Ø§Øª')
+            dispatch(updateOrderStatus({ orderId, status: 'cancelled' }))
+            toast.success('ØªÙ… Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ø·Ù„Ø¨ Ø¨Ù†Ø¬Ø§Ø­')
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'ÙØ´Ù„ Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ø·Ù„Ø¨')
+        }
+    }
+
+    const filteredOrders = orders.filter((order) => {
+        if (tab === 0) return !['completed', 'cancelled'].includes(order.status)
+        if (tab === 1) return order.status === 'completed'
+        if (tab === 2) return order.status === 'cancelled'
+        return true
+    })
+
+    const OrderCard = ({ order }) => {
+        const nextStatus = getNextStatus(order)
+
+        return (
+            <Card sx={{ height: '100%' }}>
+                <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                        <Typography variant="h6" fontWeight="bold">
+                            Ø·Ù„Ø¨ #{order.order_number}
+                        </Typography>
+                        <Chip
+                            label={statusLabels[order.status]}
+                            color={statusColors[order.status]}
+                            size="small"
+                        />
+                    </Box>
+
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                        {order.order_type === 'online' ? 'ðŸŒ Ø£ÙˆÙ†Ù„Ø§ÙŠÙ†' :
+                            order.order_type === 'walkin' ? 'ðŸš¶ Ø­Ø¶ÙˆØ±ÙŠ' : 'ðŸš— ØªÙˆØµÙŠÙ„'}
+                    </Typography>
+
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                        {new Date(order.created_at).toLocaleString('ar-SA')}
+                    </Typography>
+
+                    <Typography variant="h6" color="primary.main" sx={{ my: 2 }}>
+                        {parseFloat(order.total).toFixed(2)} Ø±.Ø³
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <IconButton
+                            size="small"
+                            onClick={() => setSelectedOrder(order)}
+                            color="primary"
+                        >
+                            <Visibility />
+                        </IconButton>
+
+                        {nextStatus && order.status !== 'cancelled' && (
+                            <Button
+                                variant="contained"
+                                size="small"
+                                onClick={() => handleStatusChange(order.id, nextStatus)}
+                                sx={{ flex: 1 }}
+                            >
+                                {statusLabels[nextStatus]} â†
+                            </Button>
+                        )}
+
+                        {['new', 'confirmed'].includes(order.status) && (
+                            <PermissionGate permission={PERMISSIONS.ORDERS_CANCEL}>
+                                <Button
+                                    variant="outlined"
+                                    color="error"
+                                    size="small"
+                                    onClick={() => handleCancelOrder(order.id)}
+                                >
+                                    âŒ Ø¥Ù„ØºØ§Ø¡
+                                </Button>
+                            </PermissionGate>
+                        )}
+
+                        {/* Refund Button - for completed orders or void for new orders */}
+                        {(order.status === 'completed' || order.payment_status === 'paid') && order.status !== 'cancelled' && (
+                            <Button
+                                variant="outlined"
+                                color="warning"
+                                size="small"
+                                startIcon={<RefundIcon />}
+                                onClick={() => setRefundOrder(order)}
+                            >
+                                Ø§Ø³ØªØ±Ø¯Ø§Ø¯
+                            </Button>
+                        )}
+                    </Box>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h5" fontWeight="bold">
+                    Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø·Ù„Ø¨Ø§Øª
+                </Typography>
+                <Button
+                    variant="outlined"
+                    startIcon={<Refresh />}
+                    onClick={fetchOrders}
+                >
+                    ØªØ­Ø¯ÙŠØ«
+                </Button>
+            </Box>
+
+            <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 3 }}>
+                <Tab label={`Ù†Ø´Ø·Ø© (${orders.filter(o => ['new', 'confirmed', 'preparing', 'ready'].includes(o.status)).length})`} />
+                <Tab label={`Ù…ÙƒØªÙ…Ù„Ø© (${orders.filter(o => o.status === 'completed').length})`} />
+                <Tab label={`Ù…Ù„ØºÙŠØ© (${orders.filter(o => o.status === 'cancelled').length})`} />
+            </Tabs>
+
+            {filteredOrders.length === 0 ? (
+                <Card>
+                    <CardContent sx={{ textAlign: 'center', py: 6 }}>
+                        <Typography color="text.secondary">
+                            Ù„Ø§ ØªÙˆØ¬Ø¯ Ø·Ù„Ø¨Ø§Øª
+                        </Typography>
+                    </CardContent>
+                </Card>
+            ) : (
+                <Grid container spacing={2}>
+                    {filteredOrders.map((order) => (
+                        <Grid item xs={12} sm={6} md={4} lg={3} key={order.id}>
+                            <OrderCard order={order} />
+                        </Grid>
+                    ))}
+                </Grid>
+            )}
+
+            {/* Order Details Dialog */}
+            <Dialog open={!!selectedOrder} onClose={() => setSelectedOrder(null)} maxWidth="sm" fullWidth>
+                <DialogTitle>
+                    ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø·Ù„Ø¨ #{selectedOrder?.order_number}
+                </DialogTitle>
+                <DialogContent>
+                    {selectedOrder && (
+                        <Box>
+                            <Box sx={{ mb: 2 }}>
+                                <Chip
+                                    label={statusLabels[selectedOrder.status]}
+                                    color={statusColors[selectedOrder.status]}
+                                />
+                            </Box>
+
+                            <Typography variant="subtitle2" color="text.secondary">Ø§Ù„Ø¹Ù†Ø§ØµØ±:</Typography>
+                            {selectedOrder.items?.map((item, index) => (
+                                <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', py: 1, borderBottom: '1px solid #eee' }}>
+                                    <Typography>
+                                        {item.item_name_ar} Ã— {item.quantity}
+                                    </Typography>
+                                    <Typography fontWeight="bold">
+                                        {parseFloat(item.total_price).toFixed(2)} Ø±.Ø³
+                                    </Typography>
+                                </Box>
+                            ))}
+
+                            <Box sx={{ mt: 2, pt: 2, borderTop: '2px solid #eee' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <Typography>Ø§Ù„Ù…Ø¬Ù…ÙˆØ¹ Ø§Ù„ÙØ±Ø¹ÙŠ:</Typography>
+                                    <Typography>{parseFloat(selectedOrder.subtotal).toFixed(2)} Ø±.Ø³</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <Typography>Ø§Ù„Ø¶Ø±ÙŠØ¨Ø© (15%):</Typography>
+                                    <Typography>{parseFloat(selectedOrder.tax).toFixed(2)} Ø±.Ø³</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                                    <Typography variant="h6" fontWeight="bold">Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ:</Typography>
+                                    <Typography variant="h6" fontWeight="bold" color="primary.main">
+                                        {parseFloat(selectedOrder.total).toFixed(2)} Ø±.Ø³
+                                    </Typography>
+                                </Box>
+                            </Box>
+
+                            {selectedOrder.notes && (
+                                <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                                    <Typography variant="subtitle2">Ù…Ù„Ø§Ø­Ø¸Ø§Øª:</Typography>
+                                    <Typography>{selectedOrder.notes}</Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSelectedOrder(null)}>Ø¥ØºÙ„Ø§Ù‚</Button>
+                    {selectedOrder && (selectedOrder.status === 'completed' || selectedOrder.payment_status === 'paid') && selectedOrder.status !== 'cancelled' && (
+                        <Button
+                            variant="contained"
+                            color="warning"
+                            startIcon={<RefundIcon />}
+                            onClick={() => {
+                                setRefundOrder(selectedOrder)
+                                setSelectedOrder(null)
+                            }}
+                        >
+                            Ø§Ø³ØªØ±Ø¯Ø§Ø¯ Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨
+                        </Button>
+                    )}
+                </DialogActions>
+            </Dialog>
+
+            {/* Refund Dialog */}
+            <RefundDialog
+                open={!!refundOrder}
+                onClose={() => setRefundOrder(null)}
+                order={refundOrder}
+                onRefundComplete={(refund) => {
+                    toast.success(`ØªÙ… Ø§Ù„Ø§Ø³ØªØ±Ø¯Ø§Ø¯ Ø¨Ù†Ø¬Ø§Ø­: ${refund.refund_number}`)
+                    fetchOrders()
+                }}
+            />
+        </Box>
+    )
+}

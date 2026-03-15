@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-02-22T12:53:31.322Z",
+  "totals": {
+    "orders_missing_cogs": 2,
+    "proposals_with_amount": 0,
+    "data_estimate_count": 0,
+    "ratio_estimate_count": 0,
+    "unresolved_count": 2,
+    "outlier_count": 2,
+    "total_proposed_cogs_amount": 0
+  },
+  "benchmarks": {
+    "global_ratio_percent": 30.78,
+    "global_sample_count": 100,
+    "median_order_total_missing_cogs": 88.88,
+    "outlier_threshold": 5000,
+    "branch": {
+      "7de7a3c7-2aa4-442e-852c-45392ca5a8f5": {
+        "sampleCount": 100,
+        "avgRatio": 0.30784328
+      }
+    }
+  },
+  "proposals": [
+    {
+      "order_id": "92c3d425-90e1-47b8-a9d3-da83c7c90435",
+      "order_number": "20260131-0022",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:25:49.000Z",
+      "order_total": 9090000,
+      "proposed_cogs_amount": 0,
+      "method": "manual_review_outlier",
+      "confidence": "very_low",
+      "anomaly_flag": "OUTLIER_ORDER_TOTAL",
+      "ratio_used": null,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": null,
+      "note": "Outlier order total (9090000) exceeds threshold (5000). Manual review required before settlement."
+    },
+    {
+      "order_id": "4d1ae284-ac20-48cb-8d27-e0e35d4ee1ab",
+      "order_number": "20260131-0028",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:54:31.000Z",
+      "order_total": 9090000,
+      "proposed_cogs_amount": 0,
+      "method": "manual_review_outlier",
+      "confidence": "very_low",
+      "anomaly_flag": "OUTLIER_ORDER_TOTAL",
+      "ratio_used": null,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": null,
+      "note": "Outlier order total (9090000) exceeds threshold (5000). Manual review required before settlement."
+    }
+  ]
+}

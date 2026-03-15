@@ -1,0 +1,459 @@
+{
+  "scanned_at": "2026-03-09T13:27:24.447Z",
+  "totals": {
+    "route_files": 34,
+    "routes": 295,
+    "unsecured_or_public": 7,
+    "auth_only_mutative": 21
+  },
+  "routes_per_file": [
+    {
+      "file": "accounting.js",
+      "count": 41
+    },
+    {
+      "file": "hr.js",
+      "count": 41
+    },
+    {
+      "file": "devices.js",
+      "count": 17
+    },
+    {
+      "file": "order.js",
+      "count": 13
+    },
+    {
+      "file": "suppliers.js",
+      "count": 13
+    },
+    {
+      "file": "delivery.js",
+      "count": 12
+    },
+    {
+      "file": "shifts.js",
+      "count": 12
+    },
+    {
+      "file": "inventory.js",
+      "count": 11
+    },
+    {
+      "file": "purchaseOrders.js",
+      "count": 8
+    },
+    {
+      "file": "refunds.js",
+      "count": 8
+    },
+    {
+      "file": "pricing.js",
+      "count": 7
+    },
+    {
+      "file": "stockIssues.js",
+      "count": 7
+    },
+    {
+      "file": "users.js",
+      "count": 7
+    },
+    {
+      "file": "auth.js",
+      "count": 6
+    },
+    {
+      "file": "expenses.js",
+      "count": 6
+    },
+    {
+      "file": "menu.js",
+      "count": 6
+    },
+    {
+      "file": "settings.js",
+      "count": 6
+    },
+    {
+      "file": "audit.js",
+      "count": 5
+    },
+    {
+      "file": "branches.js",
+      "count": 5
+    },
+    {
+      "file": "customer.js",
+      "count": 5
+    },
+    {
+      "file": "payment.js",
+      "count": 5
+    },
+    {
+      "file": "purchases.js",
+      "count": 5
+    },
+    {
+      "file": "reports.js",
+      "count": 5
+    },
+    {
+      "file": "system.js",
+      "count": 5
+    },
+    {
+      "file": "transfers.js",
+      "count": 5
+    },
+    {
+      "file": "warehouses.js",
+      "count": 5
+    },
+    {
+      "file": "category.js",
+      "count": 4
+    },
+    {
+      "file": "coupons.js",
+      "count": 4
+    },
+    {
+      "file": "entityAttachments.js",
+      "count": 4
+    },
+    {
+      "file": "notifications.js",
+      "count": 4
+    },
+    {
+      "file": "paymentGateways.js",
+      "count": 4
+    },
+    {
+      "file": "purchaseReturns.js",
+      "count": 4
+    },
+    {
+      "file": "loyalty.js",
+      "count": 3
+    },
+    {
+      "file": "upload.js",
+      "count": 2
+    }
+  ],
+  "unsecured_or_public": [
+    {
+      "file": "auth.js",
+      "method": "post",
+      "path": "/login",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "auth.js",
+      "method": "post",
+      "path": "/refresh-token",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "customer.js",
+      "method": "post",
+      "path": "/",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "menu.js",
+      "method": "get",
+      "path": "/",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": false
+    },
+    {
+      "file": "payment.js",
+      "method": "post",
+      "path": "/verify",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "payment.js",
+      "method": "post",
+      "path": "/webhook",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "settings.js",
+      "method": "get",
+      "path": "/public",
+      "optionalAuth": false,
+      "authenticate": false,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": false
+    }
+  ],
+  "auth_only_mutative": [
+    {
+      "file": "auth.js",
+      "method": "post",
+      "path": "/logout",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "auth.js",
+      "method": "put",
+      "path": "/change-password",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "auth.js",
+      "method": "put",
+      "path": "/update-profile",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "coupons.js",
+      "method": "post",
+      "path": "/validate",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/:id/print-test",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/:id/test",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/jobs/:id/cancel",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/jobs/:id/retry",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/print/order/:orderId",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "post",
+      "path": "/templates",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "put",
+      "path": "/:id",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "put",
+      "path": "/templates/:id",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "delete",
+      "path": "/:id",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "devices.js",
+      "method": "delete",
+      "path": "/templates/:id",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "entityAttachments.js",
+      "method": "post",
+      "path": "/:entityType/:entityId",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "entityAttachments.js",
+      "method": "delete",
+      "path": "/:entityType/:entityId/:attachmentId",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "order.js",
+      "method": "post",
+      "path": "/",
+      "optionalAuth": true,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "payment.js",
+      "method": "post",
+      "path": "/:orderId/confirm",
+      "optionalAuth": false,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "payment.js",
+      "method": "post",
+      "path": "/initiate",
+      "optionalAuth": true,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    },
+    {
+      "file": "pricing.js",
+      "method": "post",
+      "path": "/preview",
+      "optionalAuth": true,
+      "authenticate": true,
+      "authorize": false,
+      "requirePermission": false,
+      "requireAnyPermission": false,
+      "mutative": true
+    }
+  ]
+}

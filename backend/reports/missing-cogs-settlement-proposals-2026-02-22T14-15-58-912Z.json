@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-22T14:15:58.911Z",
+  "totals": {
+    "orders_missing_cogs": 0,
+    "proposals_with_amount": 0,
+    "data_estimate_count": 0,
+    "ratio_estimate_count": 0,
+    "unresolved_count": 0,
+    "outlier_count": 0,
+    "total_proposed_cogs_amount": 0
+  },
+  "benchmarks": {
+    "global_ratio_percent": 30.78,
+    "global_sample_count": 100,
+    "median_order_total_missing_cogs": 88.88,
+    "outlier_threshold": 5000,
+    "branch": {
+      "7de7a3c7-2aa4-442e-852c-45392ca5a8f5": {
+        "sampleCount": 100,
+        "avgRatio": 0.30784328
+      }
+    }
+  },
+  "proposals": []
+}

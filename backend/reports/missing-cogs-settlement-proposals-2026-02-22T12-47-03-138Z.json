@@ -1,0 +1,2578 @@
+{
+  "generated_at": "2026-02-22T12:47:03.138Z",
+  "totals": {
+    "orders_missing_cogs": 70,
+    "proposals_with_amount": 68,
+    "data_estimate_count": 0,
+    "ratio_estimate_count": 68,
+    "unresolved_count": 2,
+    "outlier_count": 2,
+    "total_proposed_cogs_amount": 1913.94
+  },
+  "benchmarks": {
+    "global_ratio_percent": 30.79,
+    "global_sample_count": 32,
+    "median_order_total_missing_cogs": 88.88,
+    "outlier_threshold": 5000,
+    "branch": {
+      "7de7a3c7-2aa4-442e-852c-45392ca5a8f5": {
+        "sampleCount": 32,
+        "avgRatio": 0.3078575938
+      }
+    }
+  },
+  "proposals": [
+    {
+      "order_id": "31e0a8d7-e480-43bd-8112-03d660c8aa27",
+      "order_number": "ORD-1770826199761",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": null,
+      "order_total": 200,
+      "proposed_cogs_amount": 61.57,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order ORD-1770826199761",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "31e0a8d7-e480-43bd-8112-03d660c8aa27",
+        "entry_date": null,
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 61.57,
+            "credit": 0,
+            "description": "COGS settlement for ORD-1770826199761"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 61.57,
+            "description": "Inventory reduction for ORD-1770826199761"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "5f4335fd-4e14-43dc-9867-19e981d252da",
+      "order_number": "ORD-1770826445875",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "refunded",
+      "completed_at": null,
+      "order_total": 200,
+      "proposed_cogs_amount": 61.57,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order ORD-1770826445875",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "5f4335fd-4e14-43dc-9867-19e981d252da",
+        "entry_date": null,
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 61.57,
+            "credit": 0,
+            "description": "COGS settlement for ORD-1770826445875"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 61.57,
+            "description": "Inventory reduction for ORD-1770826445875"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "cbb7e479-5318-4ed0-8996-906e8b9a3395",
+      "order_number": "ORD-1770825035182",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": null,
+      "order_total": 200,
+      "proposed_cogs_amount": 61.57,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order ORD-1770825035182",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "cbb7e479-5318-4ed0-8996-906e8b9a3395",
+        "entry_date": null,
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 61.57,
+            "credit": 0,
+            "description": "COGS settlement for ORD-1770825035182"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 61.57,
+            "description": "Inventory reduction for ORD-1770825035182"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "f64a0db4-5aaf-46f3-a1a6-37b276d2dff6",
+      "order_number": "20260130-0004",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:27:11.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0004",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "f64a0db4-5aaf-46f3-a1a6-37b276d2dff6",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0004"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260130-0004"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "71babead-b82c-4f77-9d17-d25294c46ac9",
+      "order_number": "20260130-0002",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:27:13.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0002",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "71babead-b82c-4f77-9d17-d25294c46ac9",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0002"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260130-0002"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "d0603c6b-6ffa-4c38-9617-f2feb16d4734",
+      "order_number": "20260130-0001",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:27:14.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0001",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "d0603c6b-6ffa-4c38-9617-f2feb16d4734",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0001"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260130-0001"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "10b70c23-160e-48d5-a07a-93f772236a26",
+      "order_number": "20260130-0006",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:28:57.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0006",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "10b70c23-160e-48d5-a07a-93f772236a26",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0006"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260130-0006"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "5ba1c47e-f20d-4383-8cba-6ffae1087554",
+      "order_number": "20260130-0005",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:29:48.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0005",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "5ba1c47e-f20d-4383-8cba-6ffae1087554",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0005"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260130-0005"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "a2366dcd-307c-4d70-b668-5c76d20db2df",
+      "order_number": "20260130-0007",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:31:39.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0007",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "a2366dcd-307c-4d70-b668-5c76d20db2df",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0007"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260130-0007"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "fbc53288-9a04-4c02-aa9f-f04724e70beb",
+      "order_number": "20260129-0002",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:31:43.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260129-0002",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "fbc53288-9a04-4c02-aa9f-f04724e70beb",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260129-0002"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260129-0002"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "8cb05786-8ab0-49bf-9efb-bc4c0db1daa4",
+      "order_number": "20260129-0001",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:31:47.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260129-0001",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "8cb05786-8ab0-49bf-9efb-bc4c0db1daa4",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260129-0001"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260129-0001"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "ca0ab0a6-718d-48b9-a21b-c0686ecbdcef",
+      "order_number": "20260130-0003",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-30T17:31:50.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0003",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "ca0ab0a6-718d-48b9-a21b-c0686ecbdcef",
+        "entry_date": "Fri Jan 30",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0003"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260130-0003"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "c1d6e54b-9c4e-49fa-a7f5-0152f6b257f2",
+      "order_number": "20260131-0002",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:21:45.000Z",
+      "order_total": 155.54,
+      "proposed_cogs_amount": 47.88,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0002",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "c1d6e54b-9c4e-49fa-a7f5-0152f6b257f2",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 47.88,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0002"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 47.88,
+            "description": "Inventory reduction for 20260131-0002"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "e7ee1681-b1f5-4b32-b67d-bd95e25c1618",
+      "order_number": "20260131-0001",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:21:45.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0001",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "e7ee1681-b1f5-4b32-b67d-bd95e25c1618",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0001"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0001"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "201ebaa1-88cd-4526-89f8-438000aa8a2d",
+      "order_number": "20260130-0008",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:21:48.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260130-0008",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "201ebaa1-88cd-4526-89f8-438000aa8a2d",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260130-0008"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260130-0008"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "bc3b40cc-7d0c-4992-b8a4-0966cd63fdb2",
+      "order_number": "20260131-0003",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:21:52.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0003",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "bc3b40cc-7d0c-4992-b8a4-0966cd63fdb2",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0003"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0003"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "6b2a1d22-63a6-47d3-8385-6a3986cc2d37",
+      "order_number": "20260131-0005",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:30:08.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0005",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "6b2a1d22-63a6-47d3-8385-6a3986cc2d37",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0005"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0005"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "e6cf7ca6-c4ae-490a-b1f9-47f2238c70f7",
+      "order_number": "20260131-0004",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:30:10.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0004",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "e6cf7ca6-c4ae-490a-b1f9-47f2238c70f7",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0004"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0004"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "1bf5a97c-def9-4d7e-ac5c-6084f86b71dc",
+      "order_number": "20260131-0006",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:50:49.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0006",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "1bf5a97c-def9-4d7e-ac5c-6084f86b71dc",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0006"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0006"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "cb31aacd-65c2-4121-8703-fc9684a390c2",
+      "order_number": "20260131-0007",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T09:53:08.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0007",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "cb31aacd-65c2-4121-8703-fc9684a390c2",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0007"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0007"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "ef26ac6c-a656-429c-8f36-7df3c0ddd09e",
+      "order_number": "20260131-0008",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:20:01.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0008",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "ef26ac6c-a656-429c-8f36-7df3c0ddd09e",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0008"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0008"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "ed7a1855-c464-4a69-addf-3f46045f3152",
+      "order_number": "20260131-0010",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:26:20.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0010",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "ed7a1855-c464-4a69-addf-3f46045f3152",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0010"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0010"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "6165c230-c93a-4b03-9cbc-8fd49c48eddf",
+      "order_number": "20260131-0009",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:26:21.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0009",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "6165c230-c93a-4b03-9cbc-8fd49c48eddf",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0009"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0009"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "c8bd047c-2a14-4699-9756-4b4fdff0fedb",
+      "order_number": "20260131-0011",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:27:14.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0011",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "c8bd047c-2a14-4699-9756-4b4fdff0fedb",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0011"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0011"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "4196b202-7fb8-44dc-a9b8-cabb1de2eba5",
+      "order_number": "20260131-0012",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:28:43.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0012",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "4196b202-7fb8-44dc-a9b8-cabb1de2eba5",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0012"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0012"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "d1964ea3-6b9e-4eb2-85e7-c9e657f137a4",
+      "order_number": "20260131-0015",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:54:44.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0015",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "d1964ea3-6b9e-4eb2-85e7-c9e657f137a4",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0015"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0015"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "5751af59-eb22-48c0-ae59-62eab9f94c93",
+      "order_number": "20260131-0013",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:54:45.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0013",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "5751af59-eb22-48c0-ae59-62eab9f94c93",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0013"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0013"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "8410164e-470d-44c3-8537-ae6b767c30ca",
+      "order_number": "20260131-0014",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T11:54:46.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0014",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "8410164e-470d-44c3-8537-ae6b767c30ca",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0014"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0014"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "3dd5243f-8162-4a19-9425-57273fb7d434",
+      "order_number": "20260131-0018",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T12:24:07.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0018",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "3dd5243f-8162-4a19-9425-57273fb7d434",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0018"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0018"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "032a3952-4c4a-46a8-8fc4-3b4485f27d0a",
+      "order_number": "20260131-0017",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T12:27:52.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0017",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "032a3952-4c4a-46a8-8fc4-3b4485f27d0a",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0017"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0017"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "887e6f97-8adc-4868-a53e-6c256992f30f",
+      "order_number": "20260131-0016",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T12:27:56.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0016",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "887e6f97-8adc-4868-a53e-6c256992f30f",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0016"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0016"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "84dbc92d-274e-4c68-af93-50cb38530535",
+      "order_number": "20260131-0019",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T12:28:21.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0019",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "84dbc92d-274e-4c68-af93-50cb38530535",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0019"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0019"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "92c3d425-90e1-47b8-a9d3-da83c7c90435",
+      "order_number": "20260131-0022",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:25:49.000Z",
+      "order_total": 9090000,
+      "proposed_cogs_amount": 0,
+      "method": "manual_review_outlier",
+      "confidence": "very_low",
+      "anomaly_flag": "OUTLIER_ORDER_TOTAL",
+      "ratio_used": null,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": null,
+      "note": "Outlier order total (9090000) exceeds threshold (5000). Manual review required before settlement."
+    },
+    {
+      "order_id": "a0827998-3995-40cf-97e9-a605cb660fb0",
+      "order_number": "20260131-0020",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:25:51.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0020",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "a0827998-3995-40cf-97e9-a605cb660fb0",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0020"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0020"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "db80d258-1ad5-41a5-93f5-7a252b3b1d4b",
+      "order_number": "20260131-0021",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:27:03.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0021",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "db80d258-1ad5-41a5-93f5-7a252b3b1d4b",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0021"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0021"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "4d5a68d3-ac4e-4d67-9d86-decbf3b1e020",
+      "order_number": "20260131-0023",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:52:11.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0023",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "4d5a68d3-ac4e-4d67-9d86-decbf3b1e020",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0023"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0023"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "266f013e-c0f8-4afd-a48c-d41097f15e6c",
+      "order_number": "20260131-0024",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:52:17.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0024",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "266f013e-c0f8-4afd-a48c-d41097f15e6c",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0024"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0024"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "d4236edd-59b8-4f30-a4a2-cc14e8e122e7",
+      "order_number": "20260131-0027",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:52:35.000Z",
+      "order_total": 77.77,
+      "proposed_cogs_amount": 23.94,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0027",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "d4236edd-59b8-4f30-a4a2-cc14e8e122e7",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 23.94,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0027"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 23.94,
+            "description": "Inventory reduction for 20260131-0027"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "4d1ae284-ac20-48cb-8d27-e0e35d4ee1ab",
+      "order_number": "20260131-0028",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:54:31.000Z",
+      "order_total": 9090000,
+      "proposed_cogs_amount": 0,
+      "method": "manual_review_outlier",
+      "confidence": "very_low",
+      "anomaly_flag": "OUTLIER_ORDER_TOTAL",
+      "ratio_used": null,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": null,
+      "note": "Outlier order total (9090000) exceeds threshold (5000). Manual review required before settlement."
+    },
+    {
+      "order_id": "fbef2384-af47-4ba9-b5e5-402f29e87465",
+      "order_number": "20260131-0029",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:56:52.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0029",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "fbef2384-af47-4ba9-b5e5-402f29e87465",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0029"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0029"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "226b38b8-ad69-44eb-91c9-a9439ff55189",
+      "order_number": "20260131-0030",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T13:58:51.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0030",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "226b38b8-ad69-44eb-91c9-a9439ff55189",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0030"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0030"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "11083d17-628d-4535-bb1a-9667df33716d",
+      "order_number": "20260131-0031",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T14:05:41.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0031",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "11083d17-628d-4535-bb1a-9667df33716d",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0031"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0031"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "7dd84c36-65d6-4604-ab7b-d069262fe75b",
+      "order_number": "20260131-0032",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T14:07:00.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0032",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "7dd84c36-65d6-4604-ab7b-d069262fe75b",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0032"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0032"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "7ed02556-c7a3-4463-939f-aad35b2d6128",
+      "order_number": "20260131-0033",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T14:40:24.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0033",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "7ed02556-c7a3-4463-939f-aad35b2d6128",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0033"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0033"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "96362331-296d-4e1d-b4b9-e4c4de05f724",
+      "order_number": "20260131-0034",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-01-31T14:40:28.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260131-0034",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "96362331-296d-4e1d-b4b9-e4c4de05f724",
+        "entry_date": "Sat Jan 31",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260131-0034"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260131-0034"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "9c1995d5-d930-4dad-8710-041716081b79",
+      "order_number": "20260203-0001",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-03T14:09:21.000Z",
+      "order_total": 88.88,
+      "proposed_cogs_amount": 27.36,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0001",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "9c1995d5-d930-4dad-8710-041716081b79",
+        "entry_date": "Tue Feb 03",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 27.36,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0001"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 27.36,
+            "description": "Inventory reduction for 20260203-0001"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "32bbae36-bb9a-43ca-8c8a-d1b261dd1b6b",
+      "order_number": "20260203-0002",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-03T14:09:52.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0002",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "32bbae36-bb9a-43ca-8c8a-d1b261dd1b6b",
+        "entry_date": "Tue Feb 03",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0002"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0002"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "b8395807-2b84-4c20-83e1-a8662b9e6d9d",
+      "order_number": "20260203-0003",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:10:45.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0003",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "b8395807-2b84-4c20-83e1-a8662b9e6d9d",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0003"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0003"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "f2dd5e54-ba63-4a46-b0d4-10bfb012f54f",
+      "order_number": "20260204-0006",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:15:53.000Z",
+      "order_total": 52,
+      "proposed_cogs_amount": 16.01,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260204-0006",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "f2dd5e54-ba63-4a46-b0d4-10bfb012f54f",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 16.01,
+            "credit": 0,
+            "description": "COGS settlement for 20260204-0006"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 16.01,
+            "description": "Inventory reduction for 20260204-0006"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "f706f70f-9b6a-4a85-9449-ae3c7d9ff2a0",
+      "order_number": "20260204-0005",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:15:53.000Z",
+      "order_total": 15.6,
+      "proposed_cogs_amount": 4.8,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260204-0005",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "f706f70f-9b6a-4a85-9449-ae3c7d9ff2a0",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 4.8,
+            "credit": 0,
+            "description": "COGS settlement for 20260204-0005"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 4.8,
+            "description": "Inventory reduction for 20260204-0005"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "bd6b8403-e4d5-4b2e-b94d-0a41b6a428f1",
+      "order_number": "20260204-0004",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:15:54.000Z",
+      "order_total": 13,
+      "proposed_cogs_amount": 4,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260204-0004",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "bd6b8403-e4d5-4b2e-b94d-0a41b6a428f1",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 4,
+            "credit": 0,
+            "description": "COGS settlement for 20260204-0004"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 4,
+            "description": "Inventory reduction for 20260204-0004"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "5cc3781b-0ec6-4168-9771-b4bf66da1088",
+      "order_number": "20260204-0003",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:15:55.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260204-0003",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "5cc3781b-0ec6-4168-9771-b4bf66da1088",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260204-0003"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260204-0003"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "a47ebaf4-b17b-44ef-90ce-4dc31ad987ba",
+      "order_number": "20260204-0002",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:15:56.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260204-0002",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "a47ebaf4-b17b-44ef-90ce-4dc31ad987ba",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260204-0002"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260204-0002"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "a7add505-4b36-49c7-a52e-1f648fc46e9d",
+      "order_number": "20260204-0001",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:03.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260204-0001",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "a7add505-4b36-49c7-a52e-1f648fc46e9d",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260204-0001"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260204-0001"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "b8a9e04a-fdc9-41a3-b302-edadcd9a5b5e",
+      "order_number": "20260203-0015",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:05.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0015",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "b8a9e04a-fdc9-41a3-b302-edadcd9a5b5e",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0015"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260203-0015"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "791d42e4-c6be-4d36-82f1-59f240a12ee4",
+      "order_number": "20260203-0014",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:08.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0014",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "791d42e4-c6be-4d36-82f1-59f240a12ee4",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0014"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260203-0014"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "1b571d12-6895-4b6f-ad67-40483a206de4",
+      "order_number": "20260203-0013",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:09.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0013",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "1b571d12-6895-4b6f-ad67-40483a206de4",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0013"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260203-0013"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "25ef41e9-691b-40ff-8072-38bd7419f0b8",
+      "order_number": "20260203-0012",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:10.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0012",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "25ef41e9-691b-40ff-8072-38bd7419f0b8",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0012"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260203-0012"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "348caa54-65e3-463f-b634-0594f1f8e091",
+      "order_number": "20260203-0011",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:10.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0011",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "348caa54-65e3-463f-b634-0594f1f8e091",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0011"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0011"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "dcf0aea2-e3f9-4128-8c3e-6d698abbd453",
+      "order_number": "20260203-0010",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:11.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0010",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "dcf0aea2-e3f9-4128-8c3e-6d698abbd453",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0010"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260203-0010"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "fde4f66d-274f-41ee-aac7-7281f2022b57",
+      "order_number": "20260203-0009",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:12.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0009",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "fde4f66d-274f-41ee-aac7-7281f2022b57",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0009"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0009"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "c72044e9-b887-478c-a26b-a2c726f4ff0e",
+      "order_number": "20260203-0008",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:13.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0008",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "c72044e9-b887-478c-a26b-a2c726f4ff0e",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0008"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0008"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "173dd8f3-1c56-4185-a07b-21bfd2567c6b",
+      "order_number": "20260203-0007",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:14.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0007",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "173dd8f3-1c56-4185-a07b-21bfd2567c6b",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0007"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0007"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "e696d8ef-098b-4c76-8131-fc639950254e",
+      "order_number": "20260203-0006",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:14.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0006",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "e696d8ef-098b-4c76-8131-fc639950254e",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0006"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0006"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "4e45fd04-c116-431b-879d-c3e1f1379013",
+      "order_number": "20260203-0005",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:15.000Z",
+      "order_total": 114.4,
+      "proposed_cogs_amount": 35.22,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0005",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "4e45fd04-c116-431b-879d-c3e1f1379013",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 35.22,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0005"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 35.22,
+            "description": "Inventory reduction for 20260203-0005"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "e244e0ae-428f-4a79-b07d-27ccb9d0c666",
+      "order_number": "20260203-0004",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-05T10:16:15.000Z",
+      "order_total": 100.1,
+      "proposed_cogs_amount": 30.82,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 1,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260203-0004",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "e244e0ae-428f-4a79-b07d-27ccb9d0c666",
+        "entry_date": "Thu Feb 05",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 30.82,
+            "credit": 0,
+            "description": "COGS settlement for 20260203-0004"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 30.82,
+            "description": "Inventory reduction for 20260203-0004"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "a378b216-7459-4778-bd48-216f887998e7",
+      "order_number": "20260206-0003",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-07T20:07:53.000Z",
+      "order_total": 32.2,
+      "proposed_cogs_amount": 9.91,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260206-0003",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "a378b216-7459-4778-bd48-216f887998e7",
+        "entry_date": "Sat Feb 07",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 9.91,
+            "credit": 0,
+            "description": "COGS settlement for 20260206-0003"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 9.91,
+            "description": "Inventory reduction for 20260206-0003"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "96fa37d8-7da0-443b-93b7-d0c6eab193d7",
+      "order_number": "20260205-0017",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-07T20:11:30.000Z",
+      "order_total": 32.2,
+      "proposed_cogs_amount": 9.91,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260205-0017",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "96fa37d8-7da0-443b-93b7-d0c6eab193d7",
+        "entry_date": "Sat Feb 07",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 9.91,
+            "credit": 0,
+            "description": "COGS settlement for 20260205-0017"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 9.91,
+            "description": "Inventory reduction for 20260205-0017"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "61efb7e8-e533-4ef1-b7e8-f65c069450b7",
+      "order_number": "20260205-0016",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-07T20:11:39.000Z",
+      "order_total": 32.2,
+      "proposed_cogs_amount": 9.91,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260205-0016",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "61efb7e8-e533-4ef1-b7e8-f65c069450b7",
+        "entry_date": "Sat Feb 07",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 9.91,
+            "credit": 0,
+            "description": "COGS settlement for 20260205-0016"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 9.91,
+            "description": "Inventory reduction for 20260205-0016"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    },
+    {
+      "order_id": "c0237bc2-fd36-4783-a6c2-b505a4b9f156",
+      "order_number": "20260205-0015",
+      "branch_id": "7de7a3c7-2aa4-442e-852c-45392ca5a8f5",
+      "payment_status": "paid",
+      "completed_at": "2026-02-07T20:12:02.000Z",
+      "order_total": 32.2,
+      "proposed_cogs_amount": 9.91,
+      "method": "ratio_estimate_branch",
+      "confidence": "low",
+      "anomaly_flag": null,
+      "ratio_used": 30.79,
+      "estimation_method": "menu_cost_price_then_stock_avg_then_last_purchase",
+      "costed_items": 0,
+      "missing_cost_items": 0,
+      "proposed_journal": {
+        "description": "Historical COGS settlement for order 20260205-0015",
+        "source_type": "order_cogs_settlement_proposal",
+        "source_id": "c0237bc2-fd36-4783-a6c2-b505a4b9f156",
+        "entry_date": "Sat Feb 07",
+        "lines": [
+          {
+            "account_code": "5001",
+            "debit": 9.91,
+            "credit": 0,
+            "description": "COGS settlement for 20260205-0015"
+          },
+          {
+            "account_code": "1100",
+            "debit": 0,
+            "credit": 9.91,
+            "description": "Inventory reduction for 20260205-0015"
+          }
+        ]
+      },
+      "note": "No direct cost data. Used branch historical COGS ratio (30.79%)."
+    }
+  ]
+}

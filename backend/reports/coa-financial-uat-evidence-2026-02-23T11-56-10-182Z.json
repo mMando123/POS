@@ -1,0 +1,106 @@
+{
+  "generated_at": "2026-02-23T11:56:09.925Z",
+  "cutover_date": "2026-02-24",
+  "scope": {
+    "periodFrom": null,
+    "periodTo": "2026-02",
+    "branchId": null
+  },
+  "checks": [
+    {
+      "id": "AC-01",
+      "name": "No posted lines on Header accounts after cutover",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 0,
+        "violating_entries": 0,
+        "expected": 0
+      }
+    },
+    {
+      "id": "AC-02",
+      "name": "All active gl_account_defaults point to active posting accounts",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 0,
+        "expected": 0
+      }
+    },
+    {
+      "id": "AC-03",
+      "name": "Trial Balance is balanced (global debits = credits)",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 0,
+        "total_debits": 18197230.31,
+        "total_credits": 18197230.31,
+        "expected": 0
+      }
+    },
+    {
+      "id": "AC-04",
+      "name": "Balance Sheet is balanced (Assets = Liabilities + Equity)",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 0,
+        "assets_total": 18190518.11,
+        "liabilities_plus_equity_total": 18190518.11,
+        "expected": 0
+      }
+    },
+    {
+      "id": "AC-05",
+      "name": "Tax separation is valid (1300 Asset/Dr, 2100 Liability/Cr)",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 1,
+        "account_1300": {
+          "code": "1300",
+          "account_type": "asset",
+          "normal_balance": "debit",
+          "is_header": true,
+          "is_active": true
+        },
+        "account_2100": {
+          "code": "2100",
+          "account_type": "liability",
+          "normal_balance": "credit",
+          "is_header": true,
+          "is_active": true
+        }
+      }
+    },
+    {
+      "id": "AC-06",
+      "name": "Inter-branch clearing account family 1105 ends at zero balance",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 0,
+        "expected": 0
+      }
+    },
+    {
+      "id": "AC-07",
+      "name": "Cutover adoption event exists in GL audit log",
+      "status": "PASS",
+      "passed": true,
+      "details": {
+        "value": 1,
+        "expected_min": 1
+      }
+    }
+  ],
+  "summary": {
+    "total_checks": 7,
+    "passed": 7,
+    "failed": 0,
+    "pass_rate": 100,
+    "overall_status": "PASS"
+  }
+}

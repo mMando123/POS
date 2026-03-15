@@ -1,0 +1,165 @@
+{
+  "executedAt": "2026-02-22T19:46:19.031Z",
+  "mode": "apply",
+  "before": {
+    "totalEntries": 230,
+    "totalLines": 0,
+    "orphanEntries": 230
+  },
+  "rebuildFromAudit": {
+    "candidates": 102,
+    "rebuiltEntries": 102,
+    "rebuiltLines": 204,
+    "errors": []
+  },
+  "deletedOrphanHeaders": {
+    "total": 128,
+    "byType": {
+      "purchase_receipt": 22,
+      "shift": 1,
+      "supplier_payment": 1,
+      "purchase_return": 1,
+      "expense": 1,
+      "order": 102
+    }
+  },
+  "recreateOrdersAndReceipts": {
+    "orders": {
+      "processed": 103,
+      "cogsProcessed": 0,
+      "cogsEstimated": 0,
+      "skipped": 0,
+      "total": 103,
+      "estimateMissingCOGS": true
+    },
+    "purchaseReceipts": {
+      "processed": 22,
+      "skipped": 0,
+      "syncedSuppliers": 22,
+      "total": 22
+    }
+  },
+  "recreatePurchaseReturns": {
+    "total": 1,
+    "recreated": 1,
+    "missingSource": 0,
+    "errors": []
+  },
+  "recreateSupplierPayments": {
+    "total": 1,
+    "recreated": 1,
+    "missingSource": 0,
+    "errors": []
+  },
+  "recreateShiftEntries": {
+    "total": 1,
+    "recreated": 1,
+    "missingSource": 0,
+    "errors": []
+  },
+  "recreateExpenseEntries": {
+    "total": 1,
+    "recreated": 1,
+    "errors": []
+  },
+  "postMaintenance": {
+    "supplierReconcile": {
+      "total": 7,
+      "matched": 5,
+      "discrepancies": 2,
+      "corrected": 2,
+      "autoFix": true,
+      "results": [
+        {
+          "supplier_id": "0e0a1823-c94c-46b6-9500-4ef3f3140d3a",
+          "supplier_code": "SUP-0003",
+          "supplier_name": "علي",
+          "stored_balance": 2.3,
+          "gl_balance": 2.3,
+          "difference": 0,
+          "status": "✅ OK"
+        },
+        {
+          "supplier_id": "4ec03c5f-d845-4ce7-9177-6a8070ab5e9b",
+          "supplier_code": "SUP-0001",
+          "supplier_name": "محمد",
+          "stored_balance": 493.55,
+          "gl_balance": 487.55,
+          "difference": -6,
+          "status": "🔧 CORRECTED",
+          "action": "Updated 493.55 → 487.55"
+        },
+        {
+          "supplier_id": "611f589b-7efd-4e77-bc54-76deb75a5396",
+          "supplier_code": "SUP-0002",
+          "supplier_name": "احمد",
+          "stored_balance": 178.78,
+          "gl_balance": -821.22,
+          "difference": -1000,
+          "status": "🔧 CORRECTED",
+          "action": "Updated 178.78 → -821.22"
+        },
+        {
+          "supplier_id": "8a27d106-3568-4b02-b1e7-78c84a006607",
+          "supplier_code": "SUP-0004",
+          "supplier_name": "حسن",
+          "stored_balance": 0,
+          "gl_balance": 0,
+          "difference": 0,
+          "status": "✅ OK"
+        },
+        {
+          "supplier_id": "af24d4e4-3858-489d-a0d4-533017246cf5",
+          "supplier_code": "SUP-0005",
+          "supplier_name": "حسين",
+          "stored_balance": 0,
+          "gl_balance": 0,
+          "difference": 0,
+          "status": "✅ OK"
+        },
+        {
+          "supplier_id": "bd3d28ce-7bf1-4931-bcfa-3acf5e622e50",
+          "supplier_code": "SUP-0006",
+          "supplier_name": "ابراهيم",
+          "stored_balance": 300,
+          "gl_balance": 300,
+          "difference": 0,
+          "status": "✅ OK"
+        },
+        {
+          "supplier_id": "d1f09f99-c40b-4e9d-b1ea-853107df91a2",
+          "supplier_code": "SUP-LEGACY",
+          "supplier_name": "مورد تسويات تاريخية",
+          "stored_balance": 2375,
+          "gl_balance": 2375,
+          "difference": 0,
+          "status": "✅ OK"
+        }
+      ]
+    }
+  },
+  "after": {
+    "totalEntries": 231,
+    "totalLines": 568,
+    "orphanEntries": 0
+  },
+  "validation": {
+    "counts": {
+      "totalEntries": 231,
+      "totalLines": 568,
+      "orphanEntries": 0
+    },
+    "trialBalance": {
+      "totalDebits": 0,
+      "totalCredits": 0,
+      "isBalanced": false,
+      "accountsCount": 11
+    },
+    "profitAndLoss": {
+      "revenue": 0,
+      "cogs": 2210.1,
+      "grossProfit": 18004696.9,
+      "netIncome": 18004606.9
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-02-22T15:15:36.519Z",
+  "periodFrom": "2001-01",
+  "periodTo": "2026-02",
+  "trial": {
+    "balanced": true,
+    "totalDebits": 18197004.06,
+    "totalCredits": 18197004.06,
+    "difference": 0,
+    "accountsCount": 11
+  },
+  "pnl": {
+    "totalRevenue": 18006707,
+    "totalContraRevenue": 0,
+    "netIncomeLine": 18006707,
+    "totalCOGS": 2210.1,
+    "grossProfit": 18004496.9,
+    "grossMargin": 99.99,
+    "totalOperatingExpenses": 90,
+    "netIncome": 18004406.9,
+    "profitable": true
+  },
+  "balance_sheet": {
+    "totalAssets": 18190391.86,
+    "totalLiabilities": 183001.1,
+    "totalEquity": 18007390.76,
+    "totalLiabilitiesAndEquity": 18190391.86,
+    "balanced": true,
+    "difference": 0
+  }
+}

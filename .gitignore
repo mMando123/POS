@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+run-logs/
+backend/logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup and dump artifacts (can contain API keys/secrets)
+backend/backups/
+backend/data/backups/
+backend/src/scripts/reports/
+pos/dist/

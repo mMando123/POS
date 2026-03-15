@@ -1,0 +1,65 @@
+{
+  "store": {
+    "storeName": "مطعم الذواقة",
+    "storeNameEn": "Gourmet Restaurant",
+    "phone": "0500000000",
+    "address": "الرياض، المملكة العربية السعودية",
+    "taxNumber": "300000000000003",
+    "taxRate": 0,
+    "serviceRate": 0,
+    "logo": "/uploads/6922b697-b7a0-4d50-8445-1955f275203e.jpeg",
+    "commercialRegister": ""
+  },
+  "hardware": {
+    "printers": [],
+    "printDirectly": true,
+    "enableCashDrawer": true,
+    "enableKitchenDisplay": false
+  },
+  "workflow": {
+    "autoAcceptOnline": false,
+    "allowCancelWithoutReason": false,
+    "requireManagerForVoid": true,
+    "orderNumberPrefix": "ORD-",
+    "orderNumberStart": 1000,
+    "enableOnlineOrders": true,
+    "enableDelivery": true,
+    "autoCompleteOrders": true,
+    "printKitchenReceipt": true,
+    "receiptCopies": 1
+  },
+  "receipt": {
+    "showLogo": true,
+    "showTaxNumber": true,
+    "showQRCode": true,
+    "footerText": "شكراً لزيارتكم",
+    "autoPrint": true,
+    "paperWidth": 80,
+    "showCustomerInfo": true,
+    "headerText": ""
+  },
+  "notifications": {
+    "soundEnabled": true,
+    "newOrderAlert": true,
+    "lowStockAlert": true,
+    "shiftReminder": true
+  },
+  "inventory": {
+    "densityKgPerLiter": {
+      "0c5c67dd-e063-4435-a852-6cc88a6a0705": 1
+    },
+    "unitConversionsByIngredient": {
+      "d0d3405c-a608-4eac-b94e-52472123b792": {
+        "box->kg": 1
+      }
+    }
+  },
+  "system": {
+    "language": "ar",
+    "currency": "EGP",
+    "currencySymbol": "ج.م",
+    "timezone": "Asia/Riyadh",
+    "dateFormat": "DD/MM/YYYY",
+    "themeMode": "light"
+  }
+}
