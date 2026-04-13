@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Purchase Receipt API Routes
  * Handle purchase orders and inventory receiving
  */
@@ -22,6 +22,39 @@ const {
     sequelize
 } = require('../models')
 const { Op } = require('sequelize')
+
+const normalizeDateOnlyInput = (value) => {
+    if (value === undefined || value === null || value === '') return null
+    const raw = String(value).trim()
+    const normalized = raw.includes('T') ? raw.slice(0, 10) : raw
+    const parsed = new Date(`${normalized}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+        const error = new Error('تاريخ الإنتاج أو الانتهاء غير صالح')
+        error.statusCode = 400
+        throw error
+    }
+    return normalized
+}
+
+const sanitizeInventoryDateFields = (item = {}) => {
+    const batchNumber = item.batch_number === undefined || item.batch_number === null || item.batch_number === ''
+        ? null
+        : String(item.batch_number).trim()
+    const productionDate = normalizeDateOnlyInput(item.production_date)
+    const expiryDate = normalizeDateOnlyInput(item.expiry_date)
+
+    if (productionDate && expiryDate && expiryDate < productionDate) {
+        const error = new Error('تاريخ الانتهاء يجب أن يكون بعد أو مساويًا لتاريخ الإنتاج')
+        error.statusCode = 400
+        throw error
+    }
+
+    return {
+        batch_number: batchNumber,
+        production_date: productionDate,
+        expiry_date: expiryDate
+    }
+}
 
 /**
  * GET /api/purchases
@@ -69,7 +102,7 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
         })
     } catch (error) {
         console.error('Get purchases error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø´Ø±Ø§Ø¡' })
+        res.status(500).json({ message: 'خطأ في جلب طلبات الشراء' })
     }
 })
 
@@ -82,6 +115,7 @@ router.get('/:id', authenticate, authorize('admin', 'manager'), async (req, res)
         const receipt = await PurchaseReceipt.findByPk(req.params.id, {
             include: [
                 { model: Warehouse, attributes: ['id', 'name_ar', 'name_en'] },
+                { model: Supplier, attributes: ['id', 'name_ar', 'phone'], required: false },
                 {
                     model: PurchaseReceiptItem,
                     as: 'items',
@@ -91,13 +125,13 @@ router.get('/:id', authenticate, authorize('admin', 'manager'), async (req, res)
         })
 
         if (!receipt) {
-            return res.status(404).json({ message: 'Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù… ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            return res.status(404).json({ message: 'سند الاستلام غير موجود' })
         }
 
         res.json({ data: receipt })
     } catch (error) {
         console.error('Get purchase error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù…' })
+        res.status(500).json({ message: 'خطأ في جلب بيانات سند الاستلام' })
     }
 })
 
@@ -109,13 +143,16 @@ router.post('/',
     authenticate,
     authorize('admin', 'manager'),
     [
-        body('supplier_name').notEmpty().withMessage('Ø§Ø³Ù… Ø§Ù„Ù…ÙˆØ±Ø¯ Ù…Ø·Ù„ÙˆØ¨'),
-        body('warehouse_id').isUUID().withMessage('Ù…Ø¹Ø±Ù Ø§Ù„Ù…Ø³ØªÙˆØ¯Ø¹ ØºÙŠØ± ØµØ§Ù„Ø­'),
-        body('items').isArray({ min: 1 }).withMessage('ÙŠØ¬Ø¨ Ø¥Ø¶Ø§ÙØ© Ù…Ù†ØªØ¬ ÙˆØ§Ø­Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„'),
-        body('items.*.menu_id').isUUID().withMessage('Ù…Ø¹Ø±Ù Ø§Ù„Ù…Ù†ØªØ¬ ØºÙŠØ± ØµØ§Ù„Ø­'),
-        body('items.*.quantity').isFloat({ min: 0.01 }).withMessage('Ø§Ù„ÙƒÙ…ÙŠØ© ØºÙŠØ± ØµØ§Ù„Ø­Ø©'),
-        body('items.*.unit_cost').isFloat({ min: 0 }).withMessage('Ø³Ø¹Ø± Ø§Ù„ÙˆØ­Ø¯Ø© ØºÙŠØ± ØµØ§Ù„Ø­'),
-        body('items.*.tax_rate').optional().isFloat({ min: 0, max: 100 }).withMessage('Line tax rate must be between 0 and 100')
+        body('supplier_name').notEmpty().withMessage('اسم المورد مطلوب'),
+        body('warehouse_id').isUUID().withMessage('معرف المستودع غير صالح'),
+        body('items').isArray({ min: 1 }).withMessage('يجب إضافة منتج واحد على الأقل'),
+        body('items.*.menu_id').isUUID().withMessage('معرف المنتج غير صالح'),
+        body('items.*.quantity').isFloat({ min: 0.01 }).withMessage('الكمية غير صالحة'),
+        body('items.*.unit_cost').isFloat({ min: 0 }).withMessage('سعر الوحدة غير صالح'),
+        body('items.*.tax_rate').optional().isFloat({ min: 0, max: 100 }).withMessage('نسبة الضريبة يجب أن تكون بين 0 و100')
+        , body('items.*.batch_number').optional({ nullable: true }).isString().withMessage('رقم التشغيلة يجب أن يكون نصًا'),
+        body('items.*.production_date').optional({ nullable: true }).isISO8601().withMessage('تاريخ الإنتاج غير صالح'),
+        body('items.*.expiry_date').optional({ nullable: true }).isISO8601().withMessage('تاريخ الانتهاء غير صالح')
     ],
     async (req, res) => {
         const errors = validationResult(req)
@@ -135,7 +172,7 @@ router.post('/',
             })
             if (!warehouse) {
                 await transaction.rollback()
-                return res.status(400).json({ message: 'Ø§Ù„Ù…Ø³ØªÙˆØ¯Ø¹ Ø§Ù„Ù…Ø­Ø¯Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+                return res.status(400).json({ message: 'المستودع المحدد غير موجود' })
             }
 
             // Resolve supplier_id from name if not provided
@@ -160,6 +197,7 @@ router.post('/',
                 : 0
 
             const normalizedItems = items.map((item) => {
+                const dateFields = sanitizeInventoryDateFields(item)
                 const quantity = parseFloat(item.quantity) || 0
                 const unitCost = parseFloat(item.unit_cost) || 0
                 const lineSubtotal = quantity * unitCost
@@ -174,6 +212,7 @@ router.post('/',
 
                 return {
                     ...item,
+                    ...dateFields,
                     quantity,
                     unit_cost: unitCost,
                     line_subtotal: lineSubtotal,
@@ -214,6 +253,7 @@ router.post('/',
                     unit_cost: item.unit_cost,
                     total_cost: item.line_subtotal,
                     batch_number: item.batch_number,
+                    production_date: item.production_date,
                     expiry_date: item.expiry_date
                 }, { transaction })
             ))
@@ -221,7 +261,7 @@ router.post('/',
             await transaction.commit()
 
             res.status(201).json({
-                message: 'ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù… Ø¨Ù†Ø¬Ø§Ø­',
+                message: 'تم إنشاء سند الاستلام بنجاح',
                 data: {
                     ...receipt.toJSON(),
                     items: receiptItems
@@ -230,7 +270,10 @@ router.post('/',
         } catch (error) {
             await transaction.rollback()
             console.error('Create purchase error:', error)
-            res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù…' })
+            if (error.statusCode === 400) {
+                return res.status(400).json({ message: error.message })
+            }
+            res.status(500).json({ message: 'خطأ في إنشاء سند الاستلام' })
         }
     }
 )
@@ -264,25 +307,30 @@ router.post('/:id/receive',
 
             if (!receipt) {
                 await transaction.rollback()
-                return res.status(404).json({ message: 'ÙØ§ØªÙˆØ±Ø© Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©' })
+                return res.status(404).json({ message: 'فاتورة المورد غير موجودة' })
             }
 
             if (receipt.status === 'received') {
                 await transaction.rollback()
-                return res.status(400).json({ message: 'ØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ù‡Ø°Ù‡ Ø§Ù„ÙØ§ØªÙˆØ±Ø© Ø¨Ø§Ù„ÙƒØ§Ù…Ù„ Ù…Ø³Ø¨Ù‚Ø§Ù‹' })
+                return res.status(400).json({ message: 'تم استلام هذه الفاتورة بالكامل مسبقًا' })
             }
 
             if (receipt.status === 'cancelled') {
                 await transaction.rollback()
-                return res.status(400).json({ message: 'Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø§Ø³ØªÙ„Ø§Ù… ÙØ§ØªÙˆØ±Ø© Ù…Ù„ØºØ§Ø©' })
+                return res.status(400).json({ message: 'لا يمكن استلام فاتورة ملغاة' })
             }
 
             if (req.body.items !== undefined && !Array.isArray(req.body.items)) {
                 await transaction.rollback()
-                return res.status(400).json({ message: 'items must be an array' })
+                return res.status(400).json({ message: 'يجب أن تكون العناصر في صورة مصفوفة' })
             }
 
-            const receivedItemsInput = Array.isArray(req.body.items) ? req.body.items : null
+            const receivedItemsInput = Array.isArray(req.body.items)
+                ? req.body.items.map((item) => ({
+                    ...item,
+                    ...sanitizeInventoryDateFields(item)
+                }))
+                : null
             let allFullyReceived = true
             let anyReceived = false
             const receivedByMenuId = new Map()
@@ -293,7 +341,7 @@ router.post('/:id/receive',
                     if (!receiptItemsById.has(String(received.id))) {
                         await transaction.rollback()
                         return res.status(400).json({
-                            message: `Received line item does not belong to this receipt: ${received.id}`
+                            message: `الصنف المستلم ${received.id} لا ينتمي إلى هذا السند`
                         })
                     }
                 }
@@ -321,6 +369,12 @@ router.post('/:id/receive',
 
                 if (qtyToReceive > 0) {
                     anyReceived = true
+                    const inputItem = receivedItemsInput
+                        ? receivedItemsInput.find((ri) => String(ri.id) === String(item.id))
+                        : null
+                    const effectiveBatchNumber = inputItem?.batch_number ?? item.batch_number ?? null
+                    const effectiveProductionDate = inputItem?.production_date ?? item.production_date ?? null
+                    const effectiveExpiryDate = inputItem?.expiry_date ?? item.expiry_date ?? null
 
                     // Enable track_stock for this product automatically
                     await Menu.update(
@@ -340,15 +394,19 @@ router.post('/:id/receive',
                     }, {
                         transaction,
                         reference: receipt.receipt_number,
-                        batchNumber: item.batch_number,
-                        expiryDate: item.expiry_date,
-                        notes: `Ø§Ø³ØªÙ„Ø§Ù… Ù…Ù† Ø§Ù„Ù…ÙˆØ±Ø¯: ${receipt.supplier_name}`
+                        batchNumber: effectiveBatchNumber,
+                        productionDate: effectiveProductionDate,
+                        expiryDate: effectiveExpiryDate,
+                        notes: `استلام من المورد: ${receipt.supplier_name}`
                     })
 
                     // Update the receipt item's received quantity
                     const newReceived = alreadyReceived + qtyToReceive
                     await item.update({
-                        quantity_received: newReceived
+                        quantity_received: newReceived,
+                        batch_number: effectiveBatchNumber,
+                        production_date: effectiveProductionDate,
+                        expiry_date: effectiveExpiryDate
                     }, { transaction })
 
                     const menuKey = String(item.menu_id)
@@ -369,7 +427,7 @@ router.post('/:id/receive',
 
             if (!anyReceived) {
                 await transaction.rollback()
-                return res.status(400).json({ message: 'Ù„Ù… ÙŠØªÙ… ØªØ­Ø¯ÙŠØ¯ Ø£ÙŠ ÙƒÙ…ÙŠØ© Ù„Ù„Ø§Ø³ØªÙ„Ø§Ù…' })
+                return res.status(400).json({ message: 'لم يتم تحديد أي كمية للاستلام' })
             }
 
             // Keep linked PO items synchronized with the received quantities.
@@ -462,8 +520,8 @@ router.post('/:id/receive',
 
             res.json({
                 message: allFullyReceived
-                    ? 'ØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ø¨Ø¶Ø§Ø¹Ø© Ø¨Ø§Ù„ÙƒØ§Ù…Ù„ ÙˆØ¥Ø¶Ø§ÙØªÙ‡Ø§ Ù„Ù„Ù…Ø®Ø²ÙˆÙ† âœ…'
-                    : 'ØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø¬Ø²Ø¡ Ù…Ù† Ø§Ù„Ø¨Ø¶Ø§Ø¹Ø© ÙˆØ¥Ø¶Ø§ÙØªÙ‡ Ù„Ù„Ù…Ø®Ø²ÙˆÙ† ðŸ“¦',
+                    ? 'تم استلام البضاعة بالكامل وإضافتها إلى المخزون بنجاح'
+                    : 'تم استلام جزء من البضاعة وإضافته إلى المخزون بنجاح',
                 data: await PurchaseReceipt.findByPk(receipt.id, {
                     include: [
                         { model: PurchaseReceiptItem, as: 'items', include: [{ model: Menu, attributes: ['id', 'name_ar', 'sku'] }] },
@@ -474,7 +532,10 @@ router.post('/:id/receive',
         } catch (error) {
             await transaction.rollback()
             console.error('Receive purchase error:', error)
-            res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ø¨Ø¶Ø§Ø¹Ø©' })
+            if (error.statusCode === 400) {
+                return res.status(400).json({ message: error.message })
+            }
+            res.status(500).json({ message: error.message || 'خطأ في استلام البضاعة' })
         }
     }
 )
@@ -503,19 +564,19 @@ router.delete('/:id',
 
             if (!receipt) {
                 await transaction.rollback()
-                return res.status(404).json({ message: 'Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù… ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+                return res.status(404).json({ message: 'سند الاستلام غير موجود' })
             }
 
             if (receipt.status === 'draft') {
                 // Draft: no GL entry was created, simple cancel
                 await receipt.update({ status: 'cancelled' }, { transaction })
                 await transaction.commit()
-                return res.json({ message: 'ØªÙ… Ø¥Ù„ØºØ§Ø¡ Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù… (Ù…Ø³ÙˆØ¯Ø©)' })
+                return res.json({ message: 'تم إلغاء سند الاستلام (مسودة)' })
             }
 
             if (!['received', 'partial'].includes(receipt.status)) {
                 await transaction.rollback()
-                return res.status(400).json({ message: `Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø¥Ù„ØºØ§Ø¡ Ø³Ù†Ø¯ Ø¨Ø­Ø§Ù„Ø©: ${receipt.status}` })
+                return res.status(400).json({ message: `لا يمكن إلغاء السند بحالة: ${receipt.status}` })
             }
 
             // FIX-05: Received/Partial â€” must reverse the GL entry
@@ -532,16 +593,16 @@ router.delete('/:id',
                         sourceType: 'purchase_cancel',
                         sourceId: receipt.id,
                         userId: req.user.userId,
-                        notes: `Ø¥Ù„ØºØ§Ø¡ Ø³Ù†Ø¯ Ø§Ø³ØªÙ„Ø§Ù… ${receipt.receipt_number || receipt.id}`
+                        notes: `إلغاء سند استلام ${receipt.receipt_number || receipt.id}`
                     }, { transaction })
                 } catch (stockError) {
-                    throw new Error(`Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ø³Ù†Ø¯ Ù„Ø£Ù† Ø¬Ø²Ø¡Ù‹Ø§ Ù…Ù† Ø§Ù„ÙƒÙ…ÙŠØ© Ø§Ù„Ù…Ø³ØªÙ„Ù…Ø© Ù‚Ø¯ ØªÙ… Ø§Ø³ØªÙ‡Ù„Ø§ÙƒÙ‡ Ø¨Ø§Ù„ÙØ¹Ù„. ${stockError.message}`)
+                    throw new Error(`لا يمكن إلغاء السند لأن جزءًا من الكمية المستلمة قد تم استهلاكه بالفعل. ${stockError.message}`)
                 }
             }
 
             // Step 1: Find and reverse the accounting entry
             await AccountingService.reversePurchaseReceipt(receipt.id, {
-                reason: `Ø¥Ù„ØºØ§Ø¡ Ø³Ù†Ø¯ Ø§Ø³ØªÙ„Ø§Ù… ${receipt.receipt_number || receipt.id} Ø¨ÙˆØ§Ø³Ø·Ø© Ø§Ù„Ù…Ø¯ÙŠØ±`,
+                reason: `إلغاء سند استلام ${receipt.receipt_number || receipt.id} بواسطة المدير`,
                 createdBy: req.user.userId,
                 transaction
             })
@@ -549,18 +610,18 @@ router.delete('/:id',
             // Step 2: Cancel the receipt record
             await receipt.update({
                 status: 'cancelled',
-                notes: `[Ø¥Ù„ØºØ§Ø¡ Ø¨ÙˆØ§Ø³Ø·Ø© Ø§Ù„Ù…Ø¯ÙŠØ± - ${new Date().toISOString()}] ${receipt.notes || ''}`
+                notes: `[إلغاء بواسطة المدير - ${new Date().toISOString()}] ${receipt.notes || ''}`
             }, { transaction })
 
             await transaction.commit()
 
             res.json({
-                message: 'ØªÙ… Ø¥Ù„ØºØ§Ø¡ Ø³Ù†Ø¯ Ø§Ù„Ø¥Ø³ØªÙ„Ø§Ù… ÙˆØ¹ÙƒØ³ Ø§Ù„Ù‚ÙŠØ¯ Ø§Ù„Ù…Ø­Ø§Ø³Ø¨ÙŠ Ø¨Ù†Ø¬Ø§Ø­ âœ…',
+                message: 'تم إلغاء سند الاستلام وعكس القيد المحاسبي بنجاح',
             })
         } catch (error) {
             await transaction.rollback()
             console.error('Cancel purchase error:', error)
-            res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ø³Ù†Ø¯' })
+            res.status(500).json({ message: error.message || 'خطأ في إلغاء السند' })
         }
     }
 )

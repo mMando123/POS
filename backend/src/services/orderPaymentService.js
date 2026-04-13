@@ -6,6 +6,13 @@ class OrderPaymentService {
         return Math.round((parseFloat(v || 0) + Number.EPSILON) * 100) / 100
     }
 
+    static _normalizeReportMethod(method = '') {
+        const m = String(method || '').trim().toLowerCase()
+        if (['cash', 'card', 'online'].includes(m)) return m
+        if (m === 'multi') return 'card'
+        return null
+    }
+
     static _sanitizeMethod(method = '') {
         const m = String(method || '').trim().toLowerCase()
         if (!['cash', 'card', 'online'].includes(m)) {
@@ -113,46 +120,64 @@ class OrderPaymentService {
     }
 
     /**
-     * Payment totals for a specific shift.
+     * Resolve totals from payment rows, with fallback for paid orders that
+     * are missing order_payments rows.
      */
-    static async getShiftTotals(shiftId, { transaction = null } = {}) {
+    static async calculateTotalsForOrders(orders = [], { transaction = null } = {}) {
+        const totals = { cash: 0, card: 0, online: 0 }
+        const normalizedOrders = Array.isArray(orders)
+            ? orders.filter(o => o?.id)
+            : []
+
+        const orderIds = normalizedOrders.map(o => o.id)
+        if (!orderIds.length) return totals
+
         const rows = await OrderPayment.findAll({
-            where: { shift_id: shiftId },
+            where: { order_id: { [Op.in]: orderIds } },
             attributes: [
+                'order_id',
                 'payment_method',
                 [OrderPayment.sequelize.fn('SUM', OrderPayment.sequelize.col('amount')), 'amount']
             ],
-            group: ['payment_method'],
+            group: ['order_id', 'payment_method'],
             ...(transaction ? { transaction } : {})
         })
 
-        const totals = { cash: 0, card: 0, online: 0 }
+        const ordersWithRows = new Set()
         rows.forEach(r => {
-            const m = String(r.payment_method)
-            totals[m] = this._round2(r.get('amount'))
+            const method = this._normalizeReportMethod(r.payment_method)
+            if (!method) return
+
+            ordersWithRows.add(String(r.order_id))
+            totals[method] = this._round2(totals[method] + this._round2(r.get('amount')))
         })
 
-        // Backward fallback for legacy orders without rows
-        const sum = this._round2(totals.cash + totals.card + totals.online)
-        if (sum > 0) return totals
+        normalizedOrders.forEach(o => {
+            if (ordersWithRows.has(String(o.id))) return
 
+            const method = this._normalizeReportMethod(o.payment_method)
+            if (!method) return
+
+            totals[method] = this._round2(totals[method] + this._round2(o.total))
+        })
+
+        return totals
+    }
+
+    /**
+     * Payment totals for a specific shift.
+     */
+    static async getShiftTotals(shiftId, { transaction = null } = {}) {
         const orders = await Order.findAll({
             where: {
                 shift_id: shiftId,
                 payment_status: 'paid',
                 status: { [Op.ne]: 'cancelled' }
             },
-            attributes: ['payment_method', 'total'],
+            attributes: ['id', 'payment_method', 'total'],
             ...(transaction ? { transaction } : {})
         })
-
-        orders.forEach(o => {
-            const method = ['cash', 'card', 'online'].includes(o.payment_method)
-                ? o.payment_method
-                : (o.payment_method === 'multi' ? 'card' : null)
-            if (method) totals[method] = this._round2(totals[method] + this._round2(o.total))
-        })
-        return totals
+        return this.calculateTotalsForOrders(orders, { transaction })
     }
 
     /**

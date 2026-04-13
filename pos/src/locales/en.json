@@ -274,7 +274,7 @@
         "cashDrawer": "Cash Drawer",
         "enableCashDrawer": "Open drawer after payment",
         "kitchenDisplay": "Kitchen Display (KDS)",
-        "enableKDS": "Enable KDS System",
+        "enableKDS": "Enable KDS. When disabled, orders are followed from Orders and paper kitchen tickets are used if enabled",
         "autoAccept": "Auto Accept Online Orders",
         "allowCancel": "Allow Cancellation",
         "requireManagerForVoid": "Require manager approval for order void",

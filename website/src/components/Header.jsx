@@ -31,29 +31,30 @@ export default function Header() {
     return (
         <header className="header">
             <div className="container header-content">
-                <Link to="/" className="logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Link to="/" className="logo">
                     {storeInfo.logo ? (
                         <img
                             src={storeInfo.logo.startsWith('http') ? storeInfo.logo : `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}${storeInfo.logo}`}
                             alt="Logo"
-                            style={{ height: '32px', width: '32px', objectFit: 'contain' }}
+                            className="logo-image"
                             onError={(e) => { e.target.style.display = 'none' }}
                         />
                     ) : (
-                        <span>🍽️</span>
+                        <span className="logo-emoji">🍽️</span>
                     )}
-                    {storeInfo.storeName}
+                    <span className="logo-text">{storeInfo.storeName}</span>
                 </Link>
 
-                <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <Link to="/" style={{ fontWeight: 500 }}>القائمة</Link>
-                    <Link to="/track" style={{ fontWeight: 500 }}>تتبع طلبك</Link>
+                <nav className="header-nav">
+                    <Link to="/" className="header-link">القائمة</Link>
+                    <Link to="/track" className="header-link">تتبع طلبك</Link>
 
                     <button
                         className="cart-icon"
                         onClick={() => {
                             const drawer = document.querySelector('.cart-drawer')
                             const overlay = document.querySelector('.cart-overlay')
+                            document.body.classList.add('cart-drawer-open')
                             drawer?.classList.add('open')
                             overlay?.classList.add('open')
                         }}

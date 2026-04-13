@@ -4,10 +4,12 @@ const bodyParser = require('body-parser');
 const orderRoutes = require('../../src/routes/order');
 const { Order, OrderItem, Customer, Shift, sequelize } = require('../../src/models');
 const PricingService = require('../../src/services/pricingService');
+const OrderFinalizationService = require('../../src/services/orderFinalizationService');
 
 // Mock dependencies
 jest.mock('../../src/models');
 jest.mock('../../src/services/pricingService');
+jest.mock('../../src/services/orderFinalizationService');
 jest.mock('../../src/services/logger');
 jest.mock('../../src/middleware/auth', () => ({
     authenticate: (req, res, next) => {
@@ -165,6 +167,27 @@ describe('Order Integration Flow', () => {
             expect(mockOrder.update).toHaveBeenCalledWith(
                 expect.objectContaining({ status: 'handed_to_cashier' })
             );
+        });
+    });
+
+    describe('POST /api/orders/:id/complete (Guard Delivery State Machine)', () => {
+        it('blocks completing a delivery order before rider pickup', async () => {
+            Order.findByPk.mockResolvedValue({
+                id: 'order-1',
+                branch_id: 'branch-1',
+                order_type: 'delivery',
+                delivery_status: 'assigned',
+                status: 'handed_to_cashier'
+            });
+
+            const res = await request(app)
+                .post('/api/orders/order-1/complete')
+                .set('X-Idempotency-Key', 'test-delivery-guard')
+                .send({ payment_method: 'cash' });
+
+            expect(res.status).toBe(400);
+            expect(OrderFinalizationService.finalizeOrder).not.toHaveBeenCalled();
+            expect(res.body.message).toContain('يجب أن يلتقط السائق الطلب');
         });
     });
 });

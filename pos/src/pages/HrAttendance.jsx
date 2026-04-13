@@ -5,6 +5,7 @@ import {
     Button,
     Chip,
     CircularProgress,
+    Grid,
     MenuItem,
     Paper,
     Stack,
@@ -28,6 +29,13 @@ const statusOptions = [
 ]
 
 const statusLabel = Object.fromEntries(statusOptions.map((item) => [item.value, item.label]))
+const statusChipColor = {
+    present: 'success',
+    absent: 'error',
+    late: 'warning',
+    half_day: 'info',
+    leave: 'default'
+}
 
 const defaultEntry = () => ({
     employee_id: '',
@@ -37,6 +45,18 @@ const defaultEntry = () => ({
     status: 'present',
     notes: ''
 })
+
+const MetricCard = ({ title, value, subtitle, color = '#1976d2' }) => (
+    <Paper sx={{ p: 2.25, borderRadius: 2, borderInlineStart: `4px solid ${color}`, height: '100%' }}>
+        <Typography variant="body2" color="text.secondary">{title}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.75 }}>{value}</Typography>
+        {subtitle && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                {subtitle}
+            </Typography>
+        )}
+    </Paper>
+)
 
 export default function HrAttendance() {
     const [loading, setLoading] = useState(true)
@@ -63,11 +83,59 @@ export default function HrAttendance() {
         return base
     }, [summaryRows])
 
+    const selectedEmployeeRecord = useMemo(
+        () => employees.find((item) => item.id === selectedEmployee) || null,
+        [employees, selectedEmployee]
+    )
+
     const employeeName = useMemo(() => {
-        const found = employees.find((item) => item.id === selectedEmployee)
-        if (!found) return ''
-        return `${found.first_name_ar || ''} ${found.last_name_ar || ''}`.trim()
-    }, [employees, selectedEmployee])
+        if (!selectedEmployeeRecord) return ''
+        return `${selectedEmployeeRecord.first_name_ar || ''} ${selectedEmployeeRecord.last_name_ar || ''}`.trim()
+    }, [selectedEmployeeRecord])
+
+    const attendanceInsights = useMemo(() => {
+        const totalHours = rows.reduce((sum, row) => sum + Number(row.working_hours || 0), 0)
+        const productiveDays = rows.filter((row) => ['present', 'late', 'half_day'].includes(row.status)).length
+        const latestRecord = rows[0] || null
+        const attendanceRate = rows.length > 0 ? ((productiveDays / rows.length) * 100) : 0
+
+        return {
+            totalRecords: rows.length,
+            totalHours,
+            productiveDays,
+            attendanceRate,
+            latestRecord
+        }
+    }, [rows])
+
+    const syncEntryWithExistingRow = useCallback((row) => {
+        if (!row) return
+
+        setEntry((prev) => {
+            const next = {
+                ...prev,
+                employee_id: selectedEmployee || prev.employee_id,
+                attendance_date: row.attendance_date || prev.attendance_date,
+                check_in: row.check_in || '',
+                check_out: row.check_out || '',
+                status: row.status || 'present',
+                notes: row.notes || ''
+            }
+
+            if (
+                prev.employee_id === next.employee_id &&
+                prev.attendance_date === next.attendance_date &&
+                prev.check_in === next.check_in &&
+                prev.check_out === next.check_out &&
+                prev.status === next.status &&
+                prev.notes === next.notes
+            ) {
+                return prev
+            }
+
+            return next
+        })
+    }, [selectedEmployee])
 
     const loadEmployees = useCallback(async () => {
         const response = await hrAPI.getEmployees({ status: 'active', limit: 500 })
@@ -88,6 +156,7 @@ export default function HrAttendance() {
                 status: statusFilter || undefined
             }),
             hrAPI.getAttendanceSummary({
+                employee_id: selectedEmployee || undefined,
                 from_date: fromDate || undefined,
                 to_date: toDate || undefined
             })
@@ -123,6 +192,14 @@ export default function HrAttendance() {
         })
     }, [selectedEmployee, fromDate, toDate, statusFilter, loadAttendance])
 
+    useEffect(() => {
+        if (!selectedEmployee || !entry.attendance_date) return
+        const rowForSelectedDate = rows.find((row) => row.attendance_date === entry.attendance_date)
+        if (rowForSelectedDate) {
+            syncEntryWithExistingRow(rowForSelectedDate)
+        }
+    }, [rows, selectedEmployee, entry.attendance_date, syncEntryWithExistingRow])
+
     const handleMark = async () => {
         try {
             setSaving(true)
@@ -131,7 +208,7 @@ export default function HrAttendance() {
                 employee_id: selectedEmployee
             })
             await loadAttendance()
-            setEntry((prev) => ({ ...prev, check_in: '', check_out: '', notes: '', status: 'present' }))
+            setError('')
         } catch (err) {
             setError(err.response?.data?.message || 'تعذر تسجيل الحضور')
         } finally {
@@ -166,113 +243,203 @@ export default function HrAttendance() {
                 </Alert>
             )}
 
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                        select
-                        fullWidth
-                        label="الموظف"
-                        value={selectedEmployee}
-                        onChange={(e) => setSelectedEmployee(e.target.value)}
-                    >
-                        {employees.map((employee) => (
-                            <MenuItem key={employee.id} value={employee.id}>
-                                {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        label="من تاريخ"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={fromDate}
-                        onChange={(e) => setFromDate(e.target.value)}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="السجلات المعروضة"
+                        value={attendanceInsights.totalRecords}
+                        subtitle={selectedEmployeeRecord?.employee_code || 'اختر موظفًا'}
+                        color="#1565c0"
                     />
-                    <TextField
-                        label="إلى تاريخ"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={toDate}
-                        onChange={(e) => setToDate(e.target.value)}
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="إجمالي ساعات العمل"
+                        value={attendanceInsights.totalHours.toFixed(2)}
+                        subtitle="ضمن الفترة المحددة"
+                        color="#00838f"
                     />
-                    <TextField
-                        select
-                        label="الحالة"
-                        sx={{ minWidth: 160 }}
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <MenuItem value="">الكل</MenuItem>
-                        {statusOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                    </TextField>
-                </Stack>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="أيام الدوام الفعلي"
+                        value={attendanceInsights.productiveDays}
+                        subtitle={`نسبة انتظام ${attendanceInsights.attendanceRate.toFixed(1)}%`}
+                        color="#2e7d32"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="آخر حالة مسجلة"
+                        value={statusLabel[attendanceInsights.latestRecord?.status] || '-'}
+                        subtitle={attendanceInsights.latestRecord?.attendance_date || 'لا توجد سجلات'}
+                        color="#ef6c00"
+                    />
+                </Grid>
+            </Grid>
+
+            <Paper sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>فلاتر سجل الحضور</Typography>
+                <Grid container spacing={1.5}>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الموظف"
+                            value={selectedEmployee}
+                            onChange={(e) => setSelectedEmployee(e.target.value)}
+                        >
+                            {employees.map((employee) => (
+                                <MenuItem key={employee.id} value={employee.id}>
+                                    {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="من تاريخ"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={fromDate}
+                            onChange={(e) => setFromDate(e.target.value)}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="إلى تاريخ"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={toDate}
+                            onChange={(e) => setToDate(e.target.value)}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الحالة"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                            <MenuItem value="">الكل</MenuItem>
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                </Grid>
             </Paper>
 
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>
+            <Paper sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ mb: 1.25, fontWeight: 700 }}>
                     تسجيل حضور جديد {employeeName ? `- ${employeeName}` : ''}
                 </Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                        label="التاريخ"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={entry.attendance_date}
-                        onChange={(e) => setEntry((prev) => ({ ...prev, attendance_date: e.target.value }))}
-                    />
-                    <TextField
-                        label="وقت الحضور"
-                        type="time"
-                        InputLabelProps={{ shrink: true }}
-                        value={entry.check_in}
-                        onChange={(e) => setEntry((prev) => ({ ...prev, check_in: e.target.value }))}
-                    />
-                    <TextField
-                        label="وقت الانصراف"
-                        type="time"
-                        InputLabelProps={{ shrink: true }}
-                        value={entry.check_out}
-                        onChange={(e) => setEntry((prev) => ({ ...prev, check_out: e.target.value }))}
-                    />
-                    <TextField
-                        select
-                        label="الحالة"
-                        sx={{ minWidth: 160 }}
-                        value={entry.status}
-                        onChange={(e) => setEntry((prev) => ({ ...prev, status: e.target.value }))}
-                    >
-                        {statusOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        fullWidth
-                        label="ملاحظات"
-                        value={entry.notes}
-                        onChange={(e) => setEntry((prev) => ({ ...prev, notes: e.target.value }))}
-                    />
-                    <Button
-                        variant="contained"
-                        startIcon={<SaveIcon />}
-                        onClick={handleMark}
-                        disabled={saving || !selectedEmployee || !entry.attendance_date}
-                    >
-                        تسجيل
-                    </Button>
+                {selectedEmployeeRecord && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.75 }}>
+                        {selectedEmployeeRecord.employee_code} | {selectedEmployeeRecord.department?.name_ar || 'بدون قسم'} | {selectedEmployeeRecord.designation?.title_ar || 'بدون مسمى'}
+                    </Typography>
+                )}
+                <Grid container spacing={1.5} alignItems="stretch">
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="التاريخ"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={entry.attendance_date}
+                            onChange={(e) => setEntry((prev) => ({ ...prev, attendance_date: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="وقت الحضور"
+                            type="time"
+                            InputLabelProps={{ shrink: true }}
+                            value={entry.check_in}
+                            onChange={(e) => setEntry((prev) => ({ ...prev, check_in: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="وقت الانصراف"
+                            type="time"
+                            InputLabelProps={{ shrink: true }}
+                            value={entry.check_out}
+                            onChange={(e) => setEntry((prev) => ({ ...prev, check_out: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الحالة"
+                            value={entry.status}
+                            onChange={(e) => setEntry((prev) => ({ ...prev, status: e.target.value }))}
+                        >
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                        <TextField
+                            fullWidth
+                            label="ملاحظات"
+                            value={entry.notes}
+                            onChange={(e) => setEntry((prev) => ({ ...prev, notes: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={1}>
+                        <Button
+                            fullWidth
+                            sx={{ height: '100%', minHeight: 56 }}
+                            variant="contained"
+                            startIcon={<SaveIcon />}
+                            onClick={handleMark}
+                            disabled={saving || !selectedEmployee || !entry.attendance_date}
+                        >
+                            تسجيل
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Paper>
+
+            <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.25 }}>ملخص الفترة المحددة</Typography>
+                <Stack direction="row" spacing={1.2} flexWrap="wrap" useFlexGap>
+                    <Chip color="success" label={`حاضر: ${summary.present}`} />
+                    <Chip color="error" label={`غائب: ${summary.absent}`} />
+                    <Chip color="warning" label={`متأخر: ${summary.late}`} />
+                    <Chip color="info" label={`نصف يوم: ${summary.half_day}`} />
+                    <Chip label={`إجازة: ${summary.leave}`} />
+                    <Chip variant="outlined" label={`الساعات: ${attendanceInsights.totalHours.toFixed(2)}`} />
+                    <Chip variant="outlined" label={`السجلات: ${attendanceInsights.totalRecords}`} />
                 </Stack>
             </Paper>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2} sx={{ mb: 2 }}>
-                <Chip color="success" label={`حاضر: ${summary.present}`} />
-                <Chip color="error" label={`غائب: ${summary.absent}`} />
-                <Chip color="warning" label={`متأخر: ${summary.late}`} />
-                <Chip color="info" label={`نصف يوم: ${summary.half_day}`} />
-                <Chip label={`إجازة: ${summary.leave}`} />
-            </Stack>
-
-            <Paper sx={{ overflowX: 'auto' }}>
+            <Paper sx={{ overflowX: 'auto', borderRadius: 2 }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.25}>
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>سجل الحضور</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {employeeName || 'الموظف المحدد'} - {attendanceInsights.totalRecords} سجل
+                            </Typography>
+                        </Box>
+                        {attendanceInsights.latestRecord && (
+                            <Chip
+                                color={statusChipColor[attendanceInsights.latestRecord.status] || 'default'}
+                                variant="outlined"
+                                label={`آخر حالة: ${statusLabel[attendanceInsights.latestRecord.status] || attendanceInsights.latestRecord.status} - ${attendanceInsights.latestRecord.attendance_date}`}
+                            />
+                        )}
+                    </Stack>
+                </Box>
                 {loading ? (
                     <Box sx={{ p: 5, display: 'flex', justifyContent: 'center' }}>
                         <CircularProgress />
@@ -322,4 +489,3 @@ export default function HrAttendance() {
         </Box>
     )
 }
-

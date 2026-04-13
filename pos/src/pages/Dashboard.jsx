@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -59,17 +59,30 @@ import {
     XAxis,
     YAxis
 } from 'recharts'
-import { inventoryAPI, orderAPI, reportsAPI, shiftAPI } from '../services/api'
+import {
+    auditAPI,
+    accountingAPI,
+    expenseAPI,
+    inventoryAPI,
+    orderAPI,
+    reportsAPI,
+    purchaseAPI,
+    purchaseOrderAPI,
+    shiftAPI,
+    supplierAPI,
+    transferAPI
+} from '../services/api'
 import { hasPermission, PERMISSIONS } from '../utils/permissions'
 import { useThemeConfig } from '../contexts/ThemeContext'
+import ActivityTimeline from '../components/ActivityTimeline'
 
 const statusColors = {
     new: 'info',
     confirmed: 'primary',
     preparing: 'warning',
-    ready: 'success',
-    completed: 'default',
-    cancelled: 'error',
+    ready: 'primary',
+    completed: 'success',
+    cancelled: 'default',
 }
 
 const statusLabels = {
@@ -81,17 +94,146 @@ const statusLabels = {
     cancelled: 'ملغي',
 }
 
+const paymentStatusColors = {
+    paid: 'success',
+    pending: 'warning',
+    unpaid: 'warning',
+    failed: 'error',
+    refunded: 'default',
+    partially_paid: 'info',
+}
+
+const paymentStatusLabels = {
+    paid: 'مدفوع',
+    pending: 'بانتظار الدفع',
+    unpaid: 'غير مدفوع',
+    failed: 'فشل الدفع',
+    refunded: 'مسترد',
+    partially_paid: 'دفع جزئي',
+}
+
+const operationsNavTabs = [
+    { key: 'quotes', label: 'عروض الأسعار', allRoute: '/purchase-orders' },
+    { key: 'operations', label: 'أوامر التشغيل', allRoute: '/orders' },
+    { key: 'sales', label: 'المبيعات', allRoute: '/sales-invoices' },
+    { key: 'received-products', label: 'المنتجات المستلمة', allRoute: '/purchases' },
+    { key: 'matching', label: 'مطابقة', allRoute: null },
+    { key: 'stock-transfers', label: 'تحويل المخزون', allRoute: '/stock-transfers' },
+    { key: 'finance', label: 'التمويل', allRoute: '/accounting-dashboard' },
+    { key: 'suppliers', label: 'الموردين', allRoute: '/suppliers' },
+    { key: 'journal-vouchers', label: 'السندات المالية', allRoute: '/journal-entries' },
+    { key: 'purchases', label: 'المشتريات', allRoute: '/purchase-orders' },
+]
+
+const operationsTabMessages = {
+    matching: 'لا يوجد مصدر بيانات مباشر لعمليات المطابقة في النظام الحالي.'
+}
+
+const getOperationsView = (tabKey) => {
+    if (tabKey === 'sales' || tabKey === 'operations') {
+        return {
+            showPaymentColumns: true,
+            counterpartLabel: 'العميل',
+            totalLabel: 'المجموع',
+            successLabel: 'مدفوع',
+            pendingLabel: 'قيد المتابعة'
+        }
+    }
+
+    if (tabKey === 'quotes') {
+        return {
+            showPaymentColumns: false,
+            counterpartLabel: 'المورد',
+            totalLabel: 'الإجمالي',
+            extraPrimaryLabel: 'المستودع',
+            extraSecondaryLabel: 'تاريخ الطلب',
+            successLabel: 'معتمدة',
+            pendingLabel: 'قيد التسعير'
+        }
+    }
+
+    if (tabKey === 'received-products') {
+        return {
+            showPaymentColumns: false,
+            counterpartLabel: 'المورد',
+            totalLabel: 'الإجمالي',
+            extraPrimaryLabel: 'رقم الفاتورة',
+            extraSecondaryLabel: 'المستودع',
+            successLabel: 'تم الاستلام',
+            pendingLabel: 'قيد الاستلام'
+        }
+    }
+
+    if (tabKey === 'stock-transfers') {
+        return {
+            showPaymentColumns: false,
+            counterpartLabel: 'المسار',
+            totalLabel: 'العناصر',
+            extraPrimaryLabel: 'المصدر',
+            extraSecondaryLabel: 'الهدف',
+            successLabel: 'تم التحويل',
+            pendingLabel: 'قيد النقل'
+        }
+    }
+
+    if (tabKey === 'finance' || tabKey === 'journal-vouchers') {
+        return {
+            showPaymentColumns: false,
+            counterpartLabel: 'الوصف',
+            totalLabel: 'المبلغ',
+            extraPrimaryLabel: 'نوع المصدر',
+            extraSecondaryLabel: 'الفترة',
+            successLabel: 'قيد مرحل',
+            pendingLabel: 'قيد مفتوح'
+        }
+    }
+
+    if (tabKey === 'suppliers') {
+        return {
+            showPaymentColumns: false,
+            counterpartLabel: 'المورد',
+            totalLabel: 'الرصيد الحالي',
+            extraPrimaryLabel: 'الهاتف',
+            extraSecondaryLabel: 'الرصيد الافتتاحي',
+            successLabel: 'نشط',
+            pendingLabel: 'قيد المتابعة'
+        }
+    }
+
+    if (tabKey === 'purchases') {
+        return {
+            showPaymentColumns: false,
+            counterpartLabel: 'المورد',
+            totalLabel: 'الإجمالي',
+            extraPrimaryLabel: 'المستودع',
+            extraSecondaryLabel: 'تاريخ التوريد',
+            successLabel: 'مكتملة',
+            pendingLabel: 'معلقة'
+        }
+    }
+
+    return {
+        showPaymentColumns: false,
+        counterpartLabel: 'الجهة',
+        totalLabel: 'القيمة',
+        extraPrimaryLabel: 'تفصيل 1',
+        extraSecondaryLabel: 'تفصيل 2',
+        successLabel: 'مكتمل',
+        pendingLabel: 'معلق'
+    }
+}
+
 const shortcutDefinitions = [
-    { key: 'new-order', title: 'نقطة البيع (POS)', icon: <ShoppingCart />, to: '/new-order', color: '#1976d2' },
-    { key: 'orders', title: 'الطلبات', icon: <ListAlt />, to: '/orders', color: '#0288d1', permission: PERMISSIONS.ORDERS_VIEW_OWN },
-    { key: 'cashier-queue', title: 'كاشير الاستلام', icon: <PointOfSale />, to: '/cashier-queue', color: '#7b1fa2', permission: PERMISSIONS.ORDERS_PROCESS },
-    { key: 'pending-orders', title: 'الطلبات المعلقة', icon: <AccessTime />, to: '/pending-orders', color: '#ed6c02', permission: PERMISSIONS.ORDERS_PROCESS },
-    { key: 'delivery-board', title: 'لوحة الديليفري', icon: <LocalShipping />, to: '/delivery-board', color: '#2e7d32' },
-    { key: 'inventory', title: 'المخزون', icon: <Inventory2 />, to: '/inventory', color: '#1b5e20', permission: PERMISSIONS.MENU_VIEW },
-    { key: 'purchases', title: 'المشتريات', icon: <ShoppingBasket />, to: '/purchases', color: '#0277bd', permission: PERMISSIONS.MENU_VIEW },
-    { key: 'customers', title: 'العملاء', icon: <People />, to: '/customers', color: '#1565c0', permission: PERMISSIONS.REPORTS_VIEW },
-    { key: 'reports', title: 'التقارير', icon: <TrendingUp />, to: '/reports', color: '#388e3c', permission: PERMISSIONS.REPORTS_VIEW },
-    { key: 'users', title: 'المستخدمون', icon: <Person />, to: '/users', color: '#0097a7', permission: PERMISSIONS.USERS_MANAGE },
+    { key: 'new-order', title: 'نقطة البيع (POS)', icon: <ShoppingCart />, to: '/new-order', color: 'primary' },
+    { key: 'orders', title: 'الطلبات', icon: <ListAlt />, to: '/orders', color: 'info', permission: PERMISSIONS.ORDERS_VIEW_OWN },
+    { key: 'cashier-queue', title: 'كاشير الاستلام', icon: <PointOfSale />, to: '/cashier-queue', color: 'secondary', permission: PERMISSIONS.ORDERS_PROCESS },
+    { key: 'pending-orders', title: 'الطلبات المعلقة', icon: <AccessTime />, to: '/pending-orders', color: 'warning', permission: PERMISSIONS.ORDERS_PROCESS },
+    { key: 'delivery-board', title: 'لوحة الديليفري', icon: <LocalShipping />, to: '/delivery-board', color: 'success' },
+    { key: 'inventory', title: 'المخزون', icon: <Inventory2 />, to: '/inventory', color: 'success', permission: PERMISSIONS.MENU_VIEW },
+    { key: 'purchases', title: 'المشتريات', icon: <ShoppingBasket />, to: '/purchases', color: 'info', permission: PERMISSIONS.MENU_VIEW },
+    { key: 'customers', title: 'العملاء', icon: <People />, to: '/customers', color: 'primary', permission: PERMISSIONS.REPORTS_VIEW },
+    { key: 'reports', title: 'التقارير', icon: <TrendingUp />, to: '/reports', color: 'success', permission: PERMISSIONS.REPORTS_VIEW },
+    { key: 'users', title: 'المستخدمون', icon: <Person />, to: '/users', color: 'info', permission: PERMISSIONS.USERS_MANAGE },
 ]
 
 const getOrderTypeLabel = (orderType) => {
@@ -100,6 +242,101 @@ const getOrderTypeLabel = (orderType) => {
     if (orderType === 'dine_in') return 'صالة'
     if (orderType === 'takeaway') return 'تيك أواي'
     return 'توصيل محلي'
+}
+
+const getCustomerName = (order) =>
+    order?.Customer?.name ||
+    order?.customer?.name ||
+    order?.customer_name ||
+    'عميل نقدي'
+
+const getPaymentStatusLabel = (order) => {
+    const paymentMethod = String(order?.payment_method || '').toLowerCase()
+    const paymentStatus = String(order?.payment_status || '').toLowerCase()
+
+    if (paymentMethod === 'cash' && paymentStatus !== 'paid') return 'عند الاستلام'
+    return paymentStatusLabels[paymentStatus] || 'غير محدد'
+}
+
+const getPaymentStatusColor = (order) => {
+    const paymentMethod = String(order?.payment_method || '').toLowerCase()
+    const paymentStatus = String(order?.payment_status || '').toLowerCase()
+
+    if (paymentMethod === 'cash' && paymentStatus !== 'paid') return 'warning'
+    return paymentStatusColors[paymentStatus] || 'default'
+}
+
+const getPaidAmount = (order) => {
+    const paymentRows = Array.isArray(order?.payments) ? order.payments : []
+    const paidFromRows = paymentRows.reduce((sum, row) => sum + Number(row?.amount || 0), 0)
+
+    if (paidFromRows > 0) return paidFromRows
+    if (String(order?.payment_status || '').toLowerCase() === 'paid') return Number(order?.total || 0)
+    return 0
+}
+
+const getOperationStatusMeta = (order) => {
+    const status = String(order?.status || '').toLowerCase()
+
+    if (status === 'completed') return { label: 'عملية مكتملة', color: 'success' }
+    if (status === 'cancelled') return { label: 'ملغاة', color: 'error' }
+    if (['pending'].includes(status)) return { label: 'عملية معلقة', color: 'warning' }
+    return { label: 'قيد المعالجة', color: 'info' }
+}
+
+const getPaymentBadgeMeta = (order) => {
+    const total = Number(order?.total || 0)
+    const paidAmount = getPaidAmount(order)
+
+    if (paidAmount >= total && total > 0) return { label: 'مدفوع كاملاً', color: 'success' }
+    if (paidAmount > 0) return { label: 'دفع جزئي', color: 'warning' }
+    return { label: 'غير مدفوع', color: 'error' }
+}
+
+const formatOrderDate = (value) => {
+    if (!value) return { day: '--', time: '--' }
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return { day: '--', time: '--' }
+
+    return {
+        day: date.toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        time: date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+    }
+}
+
+const pickFirstDefined = (...values) => values.find((value) => value !== undefined && value !== null && value !== '')
+
+const pickFirstNumber = (...values) => {
+    for (const value of values) {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed)) return parsed
+    }
+    return null
+}
+
+const formatAmountCell = (value, formatCurrency) => {
+    if (value === null || value === undefined || value === '') return '—'
+    if (typeof value === 'string' && Number.isNaN(Number(value))) return value
+    return formatCurrency(Number(value || 0))
+}
+
+const buildGenericStatusMeta = (status, labels = {}) => {
+    const normalized = String(status || '').toLowerCase()
+    const successStates = new Set(['completed', 'received', 'approved', 'posted', 'active'])
+    const warningStates = new Set(['pending', 'draft', 'open'])
+    const errorStates = new Set(['cancelled', 'rejected', 'inactive', 'failed'])
+
+    if (successStates.has(normalized)) {
+        return { label: labels.success || 'عملية مكتملة', color: 'success' }
+    }
+    if (warningStates.has(normalized)) {
+        return { label: labels.warning || 'عملية معلقة', color: 'warning' }
+    }
+    if (errorStates.has(normalized)) {
+        return { label: labels.error || 'ملغاة', color: 'error' }
+    }
+    return { label: labels.info || 'قيد المعالجة', color: 'info' }
 }
 
 const dedupeAlerts = (items) => {
@@ -128,47 +365,103 @@ const formatCompactNumber = (value) => {
     return `${Math.round(amount)}`
 }
 
-const StatCard = ({ title, value, icon, color }) => (
-    <Card sx={{ height: '100%', borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 14px rgba(0,0,0,0.04)' }}>
-        <CardContent sx={{ py: 2.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary" fontWeight={700}>{title}</Typography>
-                <Avatar sx={{ bgcolor: `${color}20`, color, width: 36, height: 36 }}>{icon}</Avatar>
-            </Box>
-            <Typography variant="h4" fontWeight={900} sx={{ color, letterSpacing: '-0.02em' }}>{value}</Typography>
-        </CardContent>
-    </Card>
-)
+const toSafeNumber = (value) => {
+    const amount = Number(value)
+    return Number.isFinite(amount) ? amount : 0
+}
 
-const ShortcutCard = ({ title, icon, to, color, onNavigate }) => (
-    <Grid item xs={6} sm={4} md={2}>
-        <Paper
-            onClick={() => onNavigate(to)}
-            onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') onNavigate(to)
-            }}
-            role="button"
-            tabIndex={0}
-            sx={{
-                p: 2,
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-                boxShadow: 'none',
-                cursor: 'pointer',
-                minHeight: 108,
-                transition: 'all 0.2s ease',
-                '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 8px 20px rgba(0,0,0,0.08)', borderColor: color },
-                '&:focus-visible': { outline: '3px solid', outlineColor: `${color}55`, outlineOffset: 2 }
-            }}
-        >
-            <Stack direction="column" spacing={1.2} alignItems="center" justifyContent="center">
-                <Avatar sx={{ bgcolor: `${color}22`, color, width: 42, height: 42 }}>{icon}</Avatar>
-                <Typography variant="subtitle2" fontWeight={800} textAlign="center" lineHeight={1.2}>{title}</Typography>
-            </Stack>
-        </Paper>
-    </Grid>
-)
+const StatCard = ({ title, value, icon, colorName }) => {
+    const theme = useTheme();
+    const mainColor = theme.palette[colorName]?.main || colorName;
+    const lightColor = theme.palette[colorName]?.light || `${mainColor}20`;
+
+    return (
+        <Card sx={{ 
+            height: '100%', 
+            borderRadius: 4, 
+            boxShadow: '0 4px 24px 0 rgba(0,0,0,0.04)', 
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
+            border: '1px solid',
+            borderColor: 'rgba(0,0,0,0.03)',
+            position: 'relative',
+            overflow: 'hidden',
+            '&:hover': { 
+                transform: 'translateY(-6px)',
+                boxShadow: `0 14px 28px -4px ${lightColor}` 
+            } 
+        }}>
+            <Box sx={{
+                position: 'absolute',
+                top: -20,
+                right: -20,
+                width: 140,
+                height: 140,
+                borderRadius: '50%',
+                bgcolor: lightColor,
+                opacity: 0.25,
+                zIndex: 0
+            }} />
+            
+            <CardContent sx={{ position: 'relative', zIndex: 1, p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1, flexGrow: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="body2" color="text.secondary" fontWeight="800">
+                            {title}
+                        </Typography>
+                    </Box>
+                    <Avatar sx={{ 
+                        bgcolor: lightColor, 
+                        color: mainColor, 
+                        width: 50, 
+                        height: 50, 
+                        borderRadius: 3 
+                    }}>
+                        {icon}
+                    </Avatar>
+                </Box>
+                <Typography variant="h4" fontWeight="900" sx={{ color: mainColor, letterSpacing: '-0.5px', mt: 'auto' }}>
+                    {value}
+                </Typography>
+            </CardContent>
+        </Card>
+    );
+};
+
+const ShortcutCard = ({ title, icon, to, colorName='primary', onNavigate }) => {
+    const theme = useTheme();
+    const mainColor = theme.palette[colorName]?.main || colorName;
+    const lightColor = theme.palette[colorName]?.lighter || `${mainColor}22`;
+    
+    return (
+        <Grid item xs={6} sm={4} md={2}>
+            <Paper
+                onClick={() => onNavigate(to)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') onNavigate(to)
+                }}
+                role="button"
+                tabIndex={0}
+                sx={{
+                    p: 2,
+                    borderRadius: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: 'none',
+                    cursor: 'pointer',
+                    minHeight: 108,
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': { transform: 'translateY(-4px)', boxShadow: `0 8px 25px ${mainColor}33`, borderColor: mainColor },
+                    '&:focus-visible': { outline: '3px solid', outlineColor: `${mainColor}55`, outlineOffset: 2 }
+                }}
+            >
+                <Stack direction="column" spacing={1.2} alignItems="center" justifyContent="center">
+                    <Avatar sx={{ bgcolor: lightColor, color: mainColor, width: 42, height: 42, transition: 'transform 0.2s', '.MuiPaper-root:hover &': { transform: 'scale(1.15)' } }}>{icon}</Avatar>
+                    <Typography variant="subtitle2" fontWeight={800} textAlign="center" lineHeight={1.2} sx={{ transition: 'color 0.2s', '.MuiPaper-root:hover &': { color: mainColor } }}>{title}</Typography>
+                </Stack>
+            </Paper>
+        </Grid>
+    )
+}
 
 export default function Dashboard() {
     const navigate = useNavigate()
@@ -176,10 +469,25 @@ export default function Dashboard() {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
 
     const [stats, setStats] = useState({ todayOrders: 0, todayRevenue: 0, pendingOrders: 0, completedOrders: 0 })
+    const [financialStats, setFinancialStats] = useState({
+        totalPayments: 0,
+        todayReceipts: 0,
+        todaySales: 0,
+        totalExpenses: 0,
+        todayExpenses: 0,
+        totalCredit: 0
+    })
     const [recentOrders, setRecentOrders] = useState([])
+    const [activeOperationsTab, setActiveOperationsTab] = useState('sales')
+    const [operationsRows, setOperationsRows] = useState([])
+    const [operationsLoading, setOperationsLoading] = useState(false)
+    const [operationsError, setOperationsError] = useState('')
     const [openShifts, setOpenShifts] = useState([])
     const [reportData, setReportData] = useState(null)
     const [lowStockAlerts, setLowStockAlerts] = useState([])
+    const [activityFeed, setActivityFeed] = useState([])
+    const [activityLoading, setActivityLoading] = useState(false)
+    const [activityError, setActivityError] = useState('')
     const [loadingReport, setLoadingReport] = useState(true)
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
@@ -188,13 +496,16 @@ export default function Dashboard() {
     const { user } = useSelector((state) => state.auth)
     const isAdmin = user?.role === 'admin' || user?.role === 'manager'
     const userRole = user?.role || 'cashier'
+    const canViewActivityFeed = hasPermission(userRole, PERMISSIONS.REPORTS_VIEW) || hasPermission(userRole, PERMISSIONS.USERS_VIEW)
     const { formatCurrency } = useThemeConfig()
 
-    const updateStats = (ordersData) => {
+    const updateStats = (ordersData, reportSummary = null) => {
         const list = Array.isArray(ordersData) ? ordersData : []
         const pending = list.filter((order) => ['new', 'confirmed', 'preparing'].includes(order.status)).length
         const completed = list.filter((order) => order.status === 'completed').length
-        const revenue = list.filter((order) => order.payment_status === 'paid').reduce((sum, order) => sum + parseFloat(order.total || 0), 0)
+        const revenue = reportSummary
+            ? toSafeNumber(reportSummary.totalSales)
+            : list.filter((order) => order.payment_status === 'paid').reduce((sum, order) => sum + parseFloat(order.total || 0), 0)
 
         setStats({ todayOrders: list.length, todayRevenue: revenue, pendingOrders: pending, completedOrders: completed })
     }
@@ -212,26 +523,38 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
         setIsRefreshing(true)
         setLoadingReport(true)
+        if (canViewActivityFeed) {
+            setActivityLoading(true)
+            setActivityError('')
+        }
 
         try {
             const today = new Date().toISOString().split('T')[0]
-            const [ordersRes, reportRes, alertsRes] = await Promise.allSettled([
+            const [ordersRes, reportRes, alertsRes, payablesRes, expensesRes, todayExpensesRes, activityRes] = await Promise.allSettled([
                 orderAPI.getAll({ date_from: today, limit: 100 }),
-                reportsAPI.getDaily(),
-                inventoryAPI.getAlerts()
+                reportsAPI.getDaily(today),
+                inventoryAPI.getAlerts(),
+                supplierAPI.getPayablesSummary({ include_zero: true }),
+                expenseAPI.getSummary(),
+                expenseAPI.getSummary({ from_date: today, to_date: today }),
+                canViewActivityFeed ? auditAPI.getFeed({ limit: 10 }) : Promise.resolve({ data: { data: [] } })
             ])
+
+            const reportPayload = reportRes.status === 'fulfilled'
+                ? (reportRes.value.data?.data || null)
+                : null
+            const reportSummary = reportPayload?.summary || null
 
             if (ordersRes.status === 'fulfilled') {
                 const ordersData = ordersRes.value.data?.data || []
                 setRecentOrders(ordersData.slice(0, 10))
-                updateStats(ordersData)
+                updateStats(ordersData, reportSummary)
+            } else {
+                setRecentOrders([])
+                updateStats([], reportSummary)
             }
 
-            if (reportRes.status === 'fulfilled') {
-                setReportData(reportRes.value.data?.data || null)
-            } else {
-                setReportData(null)
-            }
+            setReportData(reportPayload)
 
             if (alertsRes.status === 'fulfilled') {
                 const alertsData = alertsRes.value.data?.data || {}
@@ -241,19 +564,283 @@ export default function Dashboard() {
                 setLowStockAlerts([])
             }
 
+            const payablesData = payablesRes.status === 'fulfilled'
+                ? (payablesRes.value.data?.data || {})
+                : {}
+            const payablesRows = Array.isArray(payablesData.rows) ? payablesData.rows : []
+            const payablesSummary = payablesData.summary || {}
+            const totalPayments = payablesRows.reduce(
+                (sum, row) => sum + toSafeNumber(row.total_settlements_ap),
+                0
+            )
+
+            const allExpensesSummary = expensesRes.status === 'fulfilled'
+                ? (expensesRes.value.data?.data || {})
+                : {}
+            const todayExpensesSummary = todayExpensesRes.status === 'fulfilled'
+                ? (todayExpensesRes.value.data?.data || {})
+                : {}
+
+            setFinancialStats({
+                totalPayments,
+                todayReceipts: toSafeNumber(
+                    pickFirstDefined(
+                        reportSummary?.totalReceipts,
+                        (toSafeNumber(reportSummary?.cashReceipts) + toSafeNumber(reportSummary?.cardReceipts) + toSafeNumber(reportSummary?.onlineReceipts))
+                    )
+                ),
+                todaySales: toSafeNumber(reportSummary?.totalSales),
+                totalExpenses: toSafeNumber(allExpensesSummary.total_amount),
+                todayExpenses: toSafeNumber(todayExpensesSummary.total_amount),
+                totalCredit: toSafeNumber(pickFirstDefined(
+                    payablesSummary.net_payables,
+                    payablesSummary.total_outstanding_payables
+                ))
+            })
+
+            if (canViewActivityFeed) {
+                if (activityRes.status === 'fulfilled') {
+                    setActivityFeed(activityRes.value.data?.data || [])
+                    setActivityError('')
+                } else {
+                    setActivityFeed([])
+                    setActivityError(activityRes.reason?.response?.data?.message || 'تعذر تحميل سجل النشاط.')
+                }
+            } else {
+                setActivityFeed([])
+                setActivityError('')
+            }
+
             setLastUpdatedAt(new Date())
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
         } finally {
             setLoadingReport(false)
             setIsRefreshing(false)
+            setActivityLoading(false)
+        }
+    }
+
+    const fetchOperationsData = async (tabKey) => {
+        const unsupportedMessage = operationsTabMessages[tabKey]
+        if (unsupportedMessage) {
+            setOperationsRows([])
+            setOperationsError(unsupportedMessage)
+            return
+        }
+
+        setOperationsLoading(true)
+        setOperationsError('')
+
+        try {
+            let rows = []
+
+            if (tabKey === 'sales') {
+                const response = await orderAPI.getAll({ limit: 5, offset: 0 })
+                rows = (response.data?.data || []).slice(0, 5).map((order) => {
+                    const statusMeta = getOperationStatusMeta(order)
+                    const paymentMeta = getPaymentBadgeMeta(order)
+                    const paidAmount = getPaidAmount(order)
+
+                    return {
+                        id: order.id,
+                        date: order.created_at,
+                        reference: order.order_number,
+                        counterpart: getCustomerName(order),
+                        statusLabel: statusMeta.label,
+                        statusColor: statusMeta.color,
+                        totalValue: Number(order.total || 0),
+                        paymentLabel: paymentMeta.label,
+                        paymentColor: paymentMeta.color,
+                        paidValue: paidAmount,
+                        openTo: `/orders?search=${encodeURIComponent(order.order_number || '')}`
+                    }
+                })
+            } else if (tabKey === 'operations') {
+                const response = await orderAPI.getAll({ limit: 20, offset: 0 })
+                rows = (response.data?.data || [])
+                    .filter((order) => !['completed', 'cancelled'].includes(String(order.status || '').toLowerCase()))
+                    .slice(0, 5)
+                    .map((order) => {
+                        const statusMeta = getOperationStatusMeta(order)
+                        const paymentMeta = getPaymentBadgeMeta(order)
+                        const paidAmount = getPaidAmount(order)
+
+                        return {
+                            id: order.id,
+                            date: order.created_at,
+                            reference: order.order_number,
+                            counterpart: getCustomerName(order),
+                            statusLabel: statusMeta.label,
+                            statusColor: statusMeta.color,
+                            totalValue: Number(order.total || 0),
+                            paymentLabel: paymentMeta.label,
+                            paymentColor: paymentMeta.color,
+                            paidValue: paidAmount,
+                            openTo: `/orders?search=${encodeURIComponent(order.order_number || '')}`
+                        }
+                    })
+            } else if (tabKey === 'received-products') {
+                const response = await purchaseAPI.getAll({ limit: 5, offset: 0 })
+                rows = (response.data?.data || []).slice(0, 5).map((receipt) => {
+                    const statusMeta = buildGenericStatusMeta(receipt.status, {
+                        success: 'تم الاستلام',
+                        warning: 'استلام معلق',
+                        error: 'ملغي',
+                        info: 'قيد الاستلام'
+                    })
+
+                    return {
+                        id: receipt.id,
+                        date: receipt.created_at || receipt.invoice_date,
+                        reference: pickFirstDefined(receipt.receipt_number, receipt.invoice_number, receipt.id),
+                        counterpart: pickFirstDefined(receipt.Supplier?.name_ar, receipt.supplier_name, 'مورد غير محدد'),
+                        statusLabel: statusMeta.label,
+                        statusColor: statusMeta.color,
+                        totalValue: pickFirstNumber(receipt.total_amount, receipt.total_cost, receipt.grand_total, receipt.subtotal),
+                        extraPrimaryValue: pickFirstDefined(receipt.invoice_number, '—'),
+                        extraSecondaryValue: pickFirstDefined(receipt.Warehouse?.name_ar, '—'),
+                        paymentLabel: '—',
+                        paymentColor: 'default',
+                        paidValue: '—',
+                        openTo: '/purchases'
+                    }
+                })
+            } else if (tabKey === 'stock-transfers') {
+                const response = await transferAPI.getAll({ limit: 5, offset: 0 })
+                rows = (response.data?.data || []).slice(0, 5).map((transfer) => {
+                    const statusMeta = buildGenericStatusMeta(transfer.status, {
+                        success: 'تم التحويل',
+                        warning: 'تحويل معلق',
+                        error: 'ملغي',
+                        info: 'قيد النقل'
+                    })
+                    const itemsCount = Array.isArray(transfer.items) ? transfer.items.length : 0
+
+                    return {
+                        id: transfer.id,
+                        date: transfer.created_at || transfer.completed_at,
+                        reference: pickFirstDefined(transfer.transfer_number, transfer.id),
+                        counterpart: `${pickFirstDefined(transfer.fromWarehouse?.name_ar, 'مخزن')} ← ${pickFirstDefined(transfer.toWarehouse?.name_ar, 'مخزن')}`,
+                        statusLabel: statusMeta.label,
+                        statusColor: statusMeta.color,
+                        totalValue: `${itemsCount} صنف`,
+                        extraPrimaryValue: pickFirstDefined(transfer.fromWarehouse?.name_ar, '—'),
+                        extraSecondaryValue: pickFirstDefined(transfer.toWarehouse?.name_ar, '—'),
+                        paymentLabel: '—',
+                        paymentColor: 'default',
+                        paidValue: '—',
+                        openTo: '/stock-transfers'
+                    }
+                })
+            } else if (tabKey === 'finance' || tabKey === 'journal-vouchers') {
+                const response = await accountingAPI.getJournalEntries({ page: 1, limit: 5 })
+                rows = (response.data?.data || []).slice(0, 5).map((entry) => {
+                    const statusMeta = buildGenericStatusMeta(entry.status, {
+                        success: 'قيد مرحل',
+                        warning: 'مسودة',
+                        error: 'ملغي',
+                        info: 'قيد محاسبي'
+                    })
+
+                    return {
+                        id: entry.id,
+                        date: entry.entry_date || entry.created_at,
+                        reference: pickFirstDefined(entry.entry_number, entry.reference_number, entry.id),
+                        counterpart: pickFirstDefined(entry.description, entry.source_type, 'قيد محاسبي'),
+                        statusLabel: statusMeta.label,
+                        statusColor: statusMeta.color,
+                        totalValue: pickFirstNumber(entry.total_debit, entry.total_credit, entry.amount),
+                        extraPrimaryValue: pickFirstDefined(entry.source_type, '—'),
+                        extraSecondaryValue: pickFirstDefined(entry.fiscal_period, '—'),
+                        paymentLabel: '—',
+                        paymentColor: 'default',
+                        paidValue: '—',
+                        openTo: '/journal-entries'
+                    }
+                })
+            } else if (tabKey === 'suppliers') {
+                const response = await supplierAPI.getAll({ page: 1, limit: 50 })
+                rows = (response.data?.data || [])
+                    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+                    .slice(0, 5)
+                    .map((supplier) => {
+                        const statusMeta = buildGenericStatusMeta(supplier.status, {
+                            success: 'مورد نشط',
+                            warning: 'قيد المراجعة',
+                            error: 'مورد غير نشط',
+                            info: 'قيد المعالجة'
+                        })
+
+                        return {
+                            id: supplier.id,
+                            date: supplier.created_at || supplier.updated_at,
+                            reference: pickFirstDefined(supplier.code, supplier.id),
+                            counterpart: pickFirstDefined(supplier.name_ar, supplier.name_en, 'مورد'),
+                            statusLabel: statusMeta.label,
+                            statusColor: statusMeta.color,
+                            totalValue: pickFirstNumber(supplier.current_balance, supplier.opening_balance),
+                            extraPrimaryValue: pickFirstDefined(supplier.phone, '—'),
+                            extraSecondaryValue: pickFirstNumber(supplier.opening_balance, 0),
+                            paymentLabel: '—',
+                            paymentColor: 'default',
+                            paidValue: '—',
+                            openTo: '/suppliers'
+                        }
+                    })
+            } else if (tabKey === 'quotes' || tabKey === 'purchases') {
+                const response = await purchaseOrderAPI.getAll({ limit: 5, offset: 0 })
+                rows = (response.data?.data || []).slice(0, 5).map((purchaseOrder) => {
+                    const statusMeta = buildGenericStatusMeta(purchaseOrder.status, {
+                        success: tabKey === 'quotes' ? 'عرض معتمد' : 'عملية مكتملة',
+                        warning: tabKey === 'quotes' ? 'قيد التسعير' : 'عملية معلقة',
+                        error: 'ملغاة',
+                        info: 'قيد المعالجة'
+                    })
+
+                    return {
+                        id: purchaseOrder.id,
+                        date: purchaseOrder.created_at || purchaseOrder.order_date,
+                        reference: pickFirstDefined(purchaseOrder.po_number, purchaseOrder.id),
+                        counterpart: pickFirstDefined(purchaseOrder.Supplier?.name_ar, purchaseOrder.supplier_name, 'مورد'),
+                        statusLabel: statusMeta.label,
+                        statusColor: statusMeta.color,
+                        totalValue: pickFirstNumber(
+                            purchaseOrder.total_amount,
+                            purchaseOrder.grand_total,
+                            purchaseOrder.subtotal
+                        ),
+                        extraPrimaryValue: pickFirstDefined(purchaseOrder.Warehouse?.name_ar, '—'),
+                        extraSecondaryValue: pickFirstDefined(purchaseOrder.order_date, purchaseOrder.expected_date, '—'),
+                        paymentLabel: '—',
+                        paymentColor: 'default',
+                        paidValue: '—',
+                        openTo: '/purchase-orders'
+                    }
+                })
+            }
+
+            setOperationsRows(rows)
+            if (rows.length === 0) {
+                setOperationsError('لا توجد عمليات حديثة لهذا القسم حاليًا.')
+            }
+        } catch (error) {
+            console.error('Error fetching operations widget data:', error)
+            setOperationsRows([])
+            setOperationsError(error.response?.data?.message || 'تعذر تحميل العمليات لهذا القسم.')
+        } finally {
+            setOperationsLoading(false)
         }
     }
 
     useEffect(() => {
         fetchDashboardData()
         if (isAdmin) fetchOpenShifts()
-    }, [isAdmin])
+    }, [isAdmin, canViewActivityFeed])
+
+    useEffect(() => {
+        fetchOperationsData(activeOperationsTab)
+    }, [activeOperationsTab])
 
     useEffect(() => {
         updateStats(orders)
@@ -285,6 +872,16 @@ export default function Dashboard() {
         return total / hourlyBreakdown.length
     }, [hourlyBreakdown])
     const topRevenueMax = useMemo(() => Math.max(0, ...topItems.map((item) => Number(item.revenue || 0))), [topItems])
+    const operationsView = useMemo(() => getOperationsView(activeOperationsTab), [activeOperationsTab])
+    const recentPaidCount = useMemo(() => (
+        operationsView.showPaymentColumns
+            ? operationsRows.filter((row) => row.paymentColor === 'success').length
+            : operationsRows.filter((row) => row.statusColor === 'success').length
+    ), [operationsRows, operationsView.showPaymentColumns])
+    const recentPendingCount = useMemo(() => (
+        operationsRows.filter((row) => ['warning', 'info'].includes(row.statusColor)).length
+    ), [operationsRows])
+    const recentOperations = useMemo(() => operationsRows.slice(0, 5), [operationsRows])
 
     const renderSalesTooltip = ({ active, payload }) => {
         if (!active || !payload?.length) return null
@@ -351,14 +948,15 @@ export default function Dashboard() {
                     </Stack>
 
                     <Button
-                        variant="outlined"
+                        variant="contained"
                         startIcon={isRefreshing ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
                         onClick={() => {
                             fetchDashboardData()
+                            fetchOperationsData(activeOperationsTab)
                             if (isAdmin) fetchOpenShifts()
                         }}
                         disabled={isRefreshing}
-                        sx={{ borderRadius: 2, alignSelf: { xs: 'flex-start', sm: 'center' } }}
+                        sx={{ borderRadius: 2, alignSelf: { xs: 'flex-start', sm: 'center' }, boxShadow: '0 4px 14px rgba(25,118,210,0.25)' }}
                     >
                         تحديث الآن
                     </Button>
@@ -402,7 +1000,7 @@ export default function Dashboard() {
                         title={shortcut.title}
                         icon={shortcut.icon}
                         to={shortcut.to}
-                        color={shortcut.color}
+                        colorName={shortcut.color}
                         onNavigate={navigate}
                     />
                 ))}
@@ -413,16 +1011,54 @@ export default function Dashboard() {
             </Typography>
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={6} lg={3}>
-                    <StatCard title="إجمالي الطلبات" value={stats.todayOrders} icon={<ShoppingCart />} color="#1976d2" />
+                    <StatCard title="إجمالي الطلبات" value={stats.todayOrders} icon={<ShoppingCart />} colorName="primary" />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
-                    <StatCard title="طلبات قيد التنفيذ" value={stats.pendingOrders} icon={<AccessTime />} color="#ed6c02" />
+                    <StatCard title="طلبات قيد التنفيذ" value={stats.pendingOrders} icon={<AccessTime />} colorName="warning" />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
-                    <StatCard title="طلبات مكتملة" value={stats.completedOrders} icon={<CheckCircle />} color="#2e7d32" />
+                    <StatCard title="طلبات مكتملة" value={stats.completedOrders} icon={<CheckCircle />} colorName="success" />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
-                    <StatCard title="إيراد اليوم" value={formatCurrency(stats.todayRevenue)} icon={<AttachMoney />} color="#0288d1" />
+                    <StatCard title="إيراد اليوم" value={formatCurrency(stats.todayRevenue)} icon={<AttachMoney />} colorName="info" />
+                </Grid>
+            </Grid>
+
+            <Typography variant="h6" fontWeight={800} gutterBottom sx={{ mb: 1.5 }}>
+                الملخص المالي
+            </Typography>
+            <Grid container spacing={2.5} sx={{ mb: 4 }}>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="إجمالي المدفوعات"
+                        value={formatCurrency(financialStats.totalPayments)}
+                        icon={<PointOfSale />}
+                        colorName="#1976d2"
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="إجمالي المصروفات"
+                        value={formatCurrency(financialStats.totalExpenses)}
+                        icon={<ShoppingBasket />}
+                        colorName="#ff7043"
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="مصروفات اليوم"
+                        value={formatCurrency(financialStats.todayExpenses)}
+                        icon={<Schedule />}
+                        colorName="#f9a825"
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="إجمالي الآجل"
+                        value={formatCurrency(financialStats.totalCredit)}
+                        icon={<Warning />}
+                        colorName="#ff6f61"
+                    />
                 </Grid>
             </Grid>
 
@@ -460,9 +1096,9 @@ export default function Dashboard() {
                                     <AreaChart data={hourlyBreakdown} margin={{ top: 14, right: 14, left: 4, bottom: 8 }}>
                                         <defs>
                                             <linearGradient id="dashboardSalesGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#1976d2" stopOpacity={0.55} />
-                                                <stop offset="30%" stopColor="#2196f3" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#1976d2" stopOpacity={0} />
+                                                <stop offset="0%" stopColor={theme.palette.primary.main} stopOpacity={0.55} />
+                                                <stop offset="30%" stopColor={theme.palette.primary.light || '#2196f3'} stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.22} />
@@ -484,29 +1120,29 @@ export default function Dashboard() {
                                         />
                                         <ReferenceLine
                                             y={hourlyAverage}
-                                            stroke="#ed6c02"
+                                            stroke={theme.palette.warning.main}
                                             strokeDasharray="5 5"
                                             ifOverflow="extendDomain"
                                             label={{
                                                 value: `متوسط ${formatCompactNumber(hourlyAverage)}`,
                                                 position: 'insideTopLeft',
-                                                fill: '#ed6c02',
+                                                fill: theme.palette.warning.main,
                                                 fontSize: 11
                                             }}
                                         />
                                         <Tooltip
                                             content={renderSalesTooltip}
-                                            cursor={{ stroke: '#90caf9', strokeDasharray: '4 4' }}
+                                            cursor={{ stroke: theme.palette.primary.light || '#90caf9', strokeDasharray: '4 4' }}
                                         />
                                         <Area
                                             type="monotoneX"
                                             dataKey="sales"
-                                            stroke="#1976d2"
+                                            stroke={theme.palette.primary.main}
                                             strokeWidth={3}
                                             fillOpacity={1}
                                             fill="url(#dashboardSalesGradient)"
-                                            dot={{ r: 2.5, fill: '#ffffff', stroke: '#1976d2', strokeWidth: 2 }}
-                                            activeDot={{ r: 5.5, fill: '#1976d2', stroke: '#ffffff', strokeWidth: 2 }}
+                                            dot={{ r: 2.5, fill: '#ffffff', stroke: theme.palette.primary.main, strokeWidth: 2 }}
+                                            activeDot={{ r: 5.5, fill: theme.palette.primary.main, stroke: '#ffffff', strokeWidth: 2 }}
                                             isAnimationActive={!isMobile}
                                         />
                                     </AreaChart>
@@ -624,78 +1260,218 @@ export default function Dashboard() {
             )}
 
             <Paper sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: '0 2px 14px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                <Box sx={{ px: 2, pt: 2, pb: 1.25, borderBottom: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc' }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.75, overflowX: 'auto', pb: 0.5 }}>
+                        {operationsNavTabs.map((tab) => (
+                            <Button
+                                key={tab.key}
+                                size="small"
+                                variant={activeOperationsTab === tab.key ? 'contained' : 'outlined'}
+                                onClick={() => setActiveOperationsTab(tab.key)}
+                                sx={{
+                                    flex: '0 0 auto',
+                                    minWidth: 'fit-content',
+                                    borderRadius: 1.5,
+                                    px: 1.5,
+                                    py: 0.75,
+                                    fontWeight: 800,
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: activeOperationsTab === tab.key ? '0 6px 18px rgba(25,118,210,0.22)' : 'none',
+                                    ...(activeOperationsTab === tab.key ? {
+                                        bgcolor: '#1565c0',
+                                        '&:hover': { bgcolor: '#0d47a1' }
+                                    } : {
+                                        color: '#1565c0',
+                                        borderColor: '#90caf9',
+                                        '&:hover': {
+                                            borderColor: '#1565c0',
+                                            bgcolor: 'rgba(21,101,192,0.04)'
+                                        }
+                                    })
+                                }}
+                            >
+                                {tab.label}
+                            </Button>
+                        ))}
+                    </Box>
+                </Box>
                 <Box sx={{ p: 2.5 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="h6" fontWeight={800}>أحدث الطلبات</Typography>
-                        <MuiTooltip title="الانتقال لصفحة الطلبات">
-                            <Button variant="text" size="small" onClick={() => navigate('/orders')}>عرض الكل</Button>
-                        </MuiTooltip>
+                    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
+                        <Box>
+                            <Typography variant="h6" fontWeight={800}>أحدث خمس عمليات</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {operationsNavTabs.find((tab) => tab.key === activeOperationsTab)?.label || 'العمليات'} مرتبة من الأحدث إلى الأقدم.
+                            </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Chip label={`${recentOperations.length} عملية`} color="primary" variant="outlined" size="small" />
+                            <Chip label={`${recentPaidCount} ${operationsView.successLabel}`} color="success" variant="outlined" size="small" />
+                            <Chip label={`${recentPendingCount} ${operationsView.pendingLabel}`} color="warning" variant="outlined" size="small" />
+                            {!!operationsNavTabs.find((tab) => tab.key === activeOperationsTab)?.allRoute && (
+                                <MuiTooltip title="الانتقال لصفحة التفاصيل الكاملة">
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        onClick={() => navigate(operationsNavTabs.find((tab) => tab.key === activeOperationsTab)?.allRoute || '/')}
+                                    >
+                                        عرض الكل
+                                    </Button>
+                                </MuiTooltip>
+                            )}
+                        </Stack>
                     </Stack>
                 </Box>
                 <Divider />
 
-                {recentOrders.length === 0 ? (
+                {operationsLoading ? (
+                    <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+                        <CircularProgress />
+                    </Box>
+                ) : recentOperations.length === 0 ? (
                     <Box sx={{ py: 5, textAlign: 'center' }}>
                         <ShoppingCart sx={{ fontSize: 52, color: 'text.disabled', mb: 1 }} />
-                        <Typography color="text.secondary">لا توجد طلبات مسجلة اليوم</Typography>
-                        <Button variant="outlined" sx={{ mt: 1.5, borderRadius: 2 }} onClick={() => navigate('/new-order')}>
-                            إنشاء طلب جديد
-                        </Button>
+                        <Typography color="text.secondary">{operationsError || 'لا توجد عمليات حديثة لهذا القسم'}</Typography>
                     </Box>
                 ) : isMobile ? (
                     <Stack spacing={1.2} sx={{ p: 1.5 }}>
-                        {recentOrders.map((order) => (
+                        {recentOperations.map((item) => (
                             <Paper
-                                key={order.id}
-                                onClick={() => navigate(`/orders?search=${order.order_number}`)}
-                                sx={{ p: 1.5, borderRadius: 2, border: '1px solid', borderColor: 'divider', cursor: 'pointer' }}
+                                key={item.id}
+                                onClick={() => {
+                                    if (item.openTo) navigate(item.openTo)
+                                }}
+                                sx={{ p: 1.5, borderRadius: 2, border: '1px solid', borderColor: 'divider', cursor: item.openTo ? 'pointer' : 'default' }}
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
-                                    <Typography fontWeight={800} color="primary.main">#{order.order_number}</Typography>
-                                    <Chip label={statusLabels[order.status] || order.status} color={statusColors[order.status] || 'default'} size="small" sx={{ fontWeight: 700 }} />
+                                    <Typography fontWeight={800} color="primary.main">{item.reference}</Typography>
+                                    <Chip label={item.statusLabel} color={item.statusColor} size="small" sx={{ fontWeight: 700 }} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">{getOrderTypeLabel(order.order_type)}</Typography>
-                                    <Typography variant="body2" fontWeight={800}>{formatCurrency(order.total)}</Typography>
-                                </Stack>
-                                <Typography variant="caption" color="text.secondary">
-                                    {new Date(order.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                                <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
+                                    {item.counterpart}
                                 </Typography>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Typography variant="body2" color="text.secondary">
+                                        {operationsView.totalLabel}: {formatAmountCell(item.totalValue, formatCurrency)}
+                                    </Typography>
+                                    {operationsView.showPaymentColumns ? (
+                                        <Typography variant="body2" fontWeight={800}>
+                                            {formatAmountCell(item.paidValue, formatCurrency)}
+                                        </Typography>
+                                    ) : (
+                                        <Typography variant="body2" fontWeight={800}>
+                                            {operationsView.extraPrimaryLabel}: {formatAmountCell(item.extraPrimaryValue, formatCurrency)}
+                                        </Typography>
+                                    )}
+                                </Stack>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.75 }}>
+                                    {operationsView.showPaymentColumns ? (
+                                        <Chip
+                                            label={item.paymentLabel}
+                                            color={item.paymentColor}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ fontWeight: 700 }}
+                                        />
+                                    ) : (
+                                        <Typography variant="caption" color="text.secondary">
+                                            {operationsView.extraSecondaryLabel}: {formatAmountCell(item.extraSecondaryValue, formatCurrency)}
+                                        </Typography>
+                                    )}
+                                    <Typography variant="caption" color="text.secondary">
+                                        {formatOrderDate(item.date).time}
+                                    </Typography>
+                                </Stack>
                             </Paper>
                         ))}
                     </Stack>
                 ) : (
                     <TableContainer>
-                        <Table sx={{ minWidth: 640 }} aria-label="recent orders table">
+                        <Table sx={{ minWidth: 920 }} aria-label="recent operations table">
                             <TableHead>
-                                <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
-                                    <TableCell sx={{ fontWeight: 800 }}>رقم الطلب</TableCell>
-                                    <TableCell sx={{ fontWeight: 800 }}>النوع</TableCell>
-                                    <TableCell sx={{ fontWeight: 800 }} align="center">الإجمالي</TableCell>
+                                <TableRow sx={{ bgcolor: '#243447', '& th': { borderBottom: '2px solid', borderColor: '#1b2838', color: '#fff' } }}>
+                                    <TableCell sx={{ fontWeight: 800 }}>التاريخ</TableCell>
+                                    <TableCell sx={{ fontWeight: 800 }}>الرقم المرجعي</TableCell>
+                                    <TableCell sx={{ fontWeight: 800 }}>{operationsView.counterpartLabel}</TableCell>
                                     <TableCell sx={{ fontWeight: 800 }} align="center">الحالة</TableCell>
-                                    <TableCell sx={{ fontWeight: 800 }} align="left">وقت الإنشاء</TableCell>
+                                    <TableCell sx={{ fontWeight: 800 }} align="left">{operationsView.totalLabel}</TableCell>
+                                    {operationsView.showPaymentColumns ? (
+                                        <>
+                                            <TableCell sx={{ fontWeight: 800 }} align="center">حالة الدفع</TableCell>
+                                            <TableCell sx={{ fontWeight: 800 }} align="left">المدفوع</TableCell>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <TableCell sx={{ fontWeight: 800 }} align="left">{operationsView.extraPrimaryLabel}</TableCell>
+                                            <TableCell sx={{ fontWeight: 800 }} align="left">{operationsView.extraSecondaryLabel}</TableCell>
+                                        </>
+                                    )}
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {recentOrders.map((order) => (
-                                    <TableRow key={order.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders?search=${order.order_number}`)}>
-                                        <TableCell><Typography fontWeight={800} color="primary.main">#{order.order_number}</Typography></TableCell>
-                                        <TableCell><Typography variant="body2" color="text.secondary">{getOrderTypeLabel(order.order_type)}</Typography></TableCell>
-                                        <TableCell align="center"><Typography fontWeight={700}>{formatCurrency(order.total)}</Typography></TableCell>
-                                        <TableCell align="center">
-                                            <Chip
-                                                label={statusLabels[order.status] || order.status}
-                                                color={statusColors[order.status] || 'default'}
-                                                size="small"
-                                                sx={{ fontWeight: 700 }}
-                                                variant={['completed', 'cancelled'].includes(order.status) ? 'outlined' : 'filled'}
-                                            />
-                                        </TableCell>
-                                        <TableCell align="left">
-                                            <Typography variant="body2" color="text.secondary">
-                                                {new Date(order.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                                {recentOperations.map((item) => (
+                                    <TableRow
+                                        key={item.id}
+                                        hover={!!item.openTo}
+                                        sx={{ cursor: item.openTo ? 'pointer' : 'default' }}
+                                        onClick={() => {
+                                            if (item.openTo) navigate(item.openTo)
+                                        }}
+                                    >
+                                        <TableCell>
+                                            <Typography variant="body2" fontWeight={700} sx={{ whiteSpace: 'nowrap' }}>
+                                                {formatOrderDate(item.date).time}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {formatOrderDate(item.date).day}
                                             </Typography>
                                         </TableCell>
+                                        <TableCell>
+                                            {item.openTo ? (
+                                                <Button
+                                                    variant="text"
+                                                    size="small"
+                                                    sx={{ fontWeight: 800, px: 0, minWidth: 0, justifyContent: 'flex-start' }}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        navigate(item.openTo)
+                                                    }}
+                                                >
+                                                    {item.reference}
+                                                </Button>
+                                            ) : (
+                                                <Typography fontWeight={800} color="primary.main">{item.reference}</Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" fontWeight={700}>
+                                                {item.counterpart}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Chip label={item.statusLabel} color={item.statusColor} size="small" sx={{ fontWeight: 700 }} />
+                                        </TableCell>
+                                        <TableCell align="left">
+                                            <Typography fontWeight={700}>{formatAmountCell(item.totalValue, formatCurrency)}</Typography>
+                                        </TableCell>
+                                        {operationsView.showPaymentColumns ? (
+                                            <>
+                                                <TableCell align="center">
+                                                    <Chip label={item.paymentLabel} color={item.paymentColor} size="small" sx={{ fontWeight: 700 }} />
+                                                </TableCell>
+                                                <TableCell align="left">
+                                                    <Typography fontWeight={700}>{formatAmountCell(item.paidValue, formatCurrency)}</Typography>
+                                                </TableCell>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <TableCell align="left">
+                                                    <Typography fontWeight={700}>{formatAmountCell(item.extraPrimaryValue, formatCurrency)}</Typography>
+                                                </TableCell>
+                                                <TableCell align="left">
+                                                    <Typography fontWeight={700}>{formatAmountCell(item.extraSecondaryValue, formatCurrency)}</Typography>
+                                                </TableCell>
+                                            </>
+                                        )}
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -703,7 +1479,16 @@ export default function Dashboard() {
                     </TableContainer>
                 )}
             </Paper>
+
+            {canViewActivityFeed && (
+                <ActivityTimeline
+                    items={activityFeed}
+                    loading={activityLoading}
+                    error={activityError}
+                    title="سجل النشاط"
+                    subtitle="آخر العمليات التي نفذها المستخدمون على النظام"
+                />
+            )}
         </Box>
     )
 }
-

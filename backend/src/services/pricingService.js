@@ -1,6 +1,7 @@
 const { Op } = require('sequelize')
 const { Menu, PriceList, PriceListItem, PromotionRule, Coupon } = require('../models')
 const { loadSettings } = require('../routes/settings')
+const { resolveSelectedOptions, composeItemNotes } = require('../utils/menuOptions')
 
 class PricingService {
     static round2(value) {
@@ -348,6 +349,7 @@ class PricingService {
             }
 
             const quantity = Math.max(1, parseInt(inputItem.quantity || 1, 10))
+            const optionsResolution = resolveSelectedOptions(menuItem.option_groups, inputItem.selected_options)
             const linePricing = await this.resolveLinePrice({
                 menuItem,
                 quantity,
@@ -357,9 +359,9 @@ class PricingService {
                 transaction
             })
 
-            const unitPrice = this.round2(linePricing.unitPrice)
+            const unitPrice = this.round2(linePricing.unitPrice + optionsResolution.priceDelta)
             const lineTotal = this.round2(unitPrice * quantity)
-            const baseLineTotal = this.round2(this.round2(menuItem.price) * quantity)
+            const baseLineTotal = this.round2((this.round2(menuItem.price) + optionsResolution.priceDelta) * quantity)
             const lineSaving = this.round2(Math.max(0, baseLineTotal - lineTotal))
 
             subtotal = this.round2(subtotal + lineTotal)
@@ -380,7 +382,10 @@ class PricingService {
                 unit_price: unitPrice,
                 total_price: lineTotal,
                 batch_number: inputItem.batch_number || null,
-                notes: inputItem.notes || null,
+                selected_options: optionsResolution.selectedOptions,
+                options_summary: optionsResolution.summaryText,
+                option_price_delta: this.round2(optionsResolution.priceDelta),
+                notes: composeItemNotes(inputItem.notes || null, optionsResolution.summaryText),
                 pricing_source: linePricing.source,
                 base_price: this.round2(menuItem.price),
                 track_stock: Boolean(menuItem.track_stock)

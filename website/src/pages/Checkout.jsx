@@ -76,7 +76,7 @@ export default function Checkout() {
             // Create order
             const orderData = {
                 order_type: 'online',
-                payment_method: paymentMethod,
+                payment_method: paymentMethod === 'card' ? 'online' : paymentMethod,
                 customer_phone: formData.phone,
                 customer_name: formData.name,
                 customer_address: formData.address,
@@ -169,14 +169,14 @@ export default function Checkout() {
 
     return (
         <div className="container section">
-            <h1 style={{ marginBottom: '2rem' }}>إتمام الطلب</h1>
+            <h1 className="checkout-title" style={{ marginBottom: '2rem' }}>إتمام الطلب</h1>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '2rem' }}>
+            <div className="checkout-layout">
                 {/* Form */}
-                <div className="card" style={{ padding: '1.5rem' }}>
+                <div className="card checkout-card" style={{ padding: '1.5rem' }}>
                     <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem' }}>معلومات التوصيل</h2>
 
-                    <form onSubmit={handleSubmit}>
+                    <form id="checkout-form" onSubmit={handleSubmit}>
                         <div style={{ marginBottom: '1rem' }}>
                             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
                                 الاسم
@@ -238,17 +238,13 @@ export default function Checkout() {
                             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
                                 طريقة الدفع
                             </label>
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                <label style={{
-                                    flex: 1,
-                                    padding: '1rem',
-                                    border: `2px solid ${paymentMethod === 'cash' ? 'var(--primary)' : 'var(--border)'}`,
-                                    borderRadius: '0.5rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem'
-                                }}>
+                            <div className="checkout-payment-options">
+                                <label
+                                    className={`checkout-payment-option ${paymentMethod === 'cash' ? 'active' : ''}`}
+                                    style={{
+                                        border: `2px solid ${paymentMethod === 'cash' ? 'var(--primary)' : 'var(--border)'}`
+                                    }}
+                                >
                                     <input
                                         type="radio"
                                         name="payment"
@@ -258,16 +254,12 @@ export default function Checkout() {
                                     />
                                     💵 الدفع عند الاستلام
                                 </label>
-                                <label style={{
-                                    flex: 1,
-                                    padding: '1rem',
-                                    border: `2px solid ${paymentMethod === 'card' ? 'var(--primary)' : 'var(--border)'}`,
-                                    borderRadius: '0.5rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem'
-                                }}>
+                                <label
+                                    className={`checkout-payment-option ${paymentMethod === 'card' ? 'active' : ''}`}
+                                    style={{
+                                        border: `2px solid ${paymentMethod === 'card' ? 'var(--primary)' : 'var(--border)'}`
+                                    }}
+                                >
                                     <input
                                         type="radio"
                                         name="payment"
@@ -291,11 +283,11 @@ export default function Checkout() {
                 </div>
 
                 {/* Order Summary */}
-                <div className="card" style={{ padding: '1.5rem', alignSelf: 'start' }}>
+                <div className="card checkout-card checkout-summary" style={{ padding: '1.5rem', alignSelf: 'start' }}>
                     <h2 style={{ marginBottom: '1rem', fontSize: '1.25rem' }}>ملخص الطلب</h2>
 
                     {items.map((item) => (
-                        <div key={item.menu_id} style={{
+                        <div key={item.menu_id} className="checkout-summary-item" style={{
                             display: 'flex',
                             justifyContent: 'space-between',
                             padding: '0.75rem 0',
@@ -307,20 +299,35 @@ export default function Checkout() {
                     ))}
 
                     <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '2px solid var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <div className="checkout-summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                             <span>المجموع الفرعي</span>
                             <span>{formatCurrency(total)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <div className="checkout-summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                             <span>الضريبة ({taxRate}%)</span>
                             <span>{formatCurrency(tax)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '1.25rem', fontWeight: 700 }}>
+                        <div className="checkout-summary-total" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '1.25rem', fontWeight: 700 }}>
                             <span>الإجمالي</span>
                             <span style={{ color: 'var(--primary)' }}>{formatCurrency(grandTotal)}</span>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="checkout-mobile-bar">
+                <div className="checkout-mobile-total">
+                    <span>Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ</span>
+                    <strong>{formatCurrency(grandTotal)}</strong>
+                </div>
+                <button
+                    type="submit"
+                    form="checkout-form"
+                    className="btn btn-primary checkout-mobile-submit"
+                    disabled={loading}
+                >
+                    {loading ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„...' : 'ØªØ£ÙƒÙŠØ¯ Ø§Ù„Ø·Ù„Ø¨'}
+                </button>
             </div>
         </div>
     )

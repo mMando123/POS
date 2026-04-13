@@ -38,6 +38,39 @@ const normalizeUomInput = (value, fallback = 'piece') => {
     return raw
 }
 
+const normalizeDateOnlyInput = (value) => {
+    if (value === undefined || value === null || value === '') return null
+    const raw = String(value).trim()
+    const normalized = raw.includes('T') ? raw.slice(0, 10) : raw
+    const parsed = new Date(`${normalized}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+        const error = new Error('تاريخ الإنتاج أو الانتهاء غير صالح')
+        error.statusCode = 400
+        throw error
+    }
+    return normalized
+}
+
+const sanitizeInventoryDateFields = (item = {}) => {
+    const batchNumber = item.batch_number === undefined || item.batch_number === null || item.batch_number === ''
+        ? null
+        : String(item.batch_number).trim()
+    const productionDate = normalizeDateOnlyInput(item.production_date)
+    const expiryDate = normalizeDateOnlyInput(item.expiry_date)
+
+    if (productionDate && expiryDate && expiryDate < productionDate) {
+        const error = new Error('تاريخ الانتهاء يجب أن يكون بعد أو مساويًا لتاريخ الإنتاج')
+        error.statusCode = 400
+        throw error
+    }
+
+    return {
+        batch_number: batchNumber,
+        production_date: productionDate,
+        expiry_date: expiryDate
+    }
+}
+
 // ==================== STOCK QUERIES ====================
 
 /**
@@ -122,6 +155,153 @@ router.get('/stock', authenticate, async (req, res) => {
 })
 
 /**
+ * GET /api/inventory/branch-summary
+ * Get aggregated stock report by branch
+ */
+router.get('/branch-summary', authenticate, authorize('admin', 'manager'), async (req, res) => {
+    try {
+        const { branch_id, warehouse_id, search } = req.query
+
+        const stockWhere = {}
+        const menuWhere = { track_stock: true }
+        const warehouseWhere = {}
+
+        if (warehouse_id) stockWhere.warehouse_id = warehouse_id
+        if (search) {
+            menuWhere[Op.or] = [
+                { name_ar: { [Op.like]: `%${search}%` } },
+                { name_en: { [Op.like]: `%${search}%` } },
+                { sku: { [Op.like]: `%${search}%` } },
+                { barcode: { [Op.like]: `%${search}%` } }
+            ]
+        }
+
+        if (req.user?.role !== 'admin') {
+            warehouseWhere.branch_id = req.user?.branchId || null
+        } else if (branch_id) {
+            warehouseWhere.branch_id = branch_id
+        }
+
+        const stocks = await Stock.findAll({
+            where: stockWhere,
+            include: [
+                {
+                    model: Menu,
+                    where: menuWhere,
+                    attributes: ['id', 'name_ar', 'name_en', 'sku', 'barcode']
+                },
+                {
+                    model: Warehouse,
+                    where: warehouseWhere,
+                    attributes: ['id', 'name_ar', 'branch_id'],
+                    include: [
+                        {
+                            model: Branch,
+                            attributes: ['id', 'name_ar', 'name_en'],
+                            required: false
+                        }
+                    ]
+                }
+            ],
+            order: [
+                [Warehouse, 'branch_id', 'ASC'],
+                [Warehouse, 'name_ar', 'ASC'],
+                [Menu, 'name_ar', 'ASC']
+            ]
+        })
+
+        const branchMap = new Map()
+
+        for (const stockEntry of stocks) {
+            const warehouse = stockEntry.Warehouse
+            const branchId = warehouse?.branch_id || 'unassigned'
+            const branchName = warehouse?.Branch?.name_ar || warehouse?.Branch?.name_en || 'بدون فرع'
+            const quantity = parseFloat(stockEntry.quantity || 0)
+            const reserved = parseFloat(stockEntry.reserved_qty || 0)
+            const available = quantity - reserved
+            const avgCost = parseFloat(stockEntry.avg_cost || 0)
+            const minStock = parseFloat(stockEntry.min_stock || 0)
+
+            if (!branchMap.has(branchId)) {
+                branchMap.set(branchId, {
+                    branch_id: warehouse?.branch_id || null,
+                    branch_name: branchName,
+                    warehouse_ids: new Set(),
+                    warehouse_names: new Set(),
+                    product_lines: 0,
+                    total_quantity: 0,
+                    total_available: 0,
+                    total_reserved: 0,
+                    total_value: 0,
+                    low_stock_count: 0,
+                    out_of_stock_count: 0
+                })
+            }
+
+            const branchRow = branchMap.get(branchId)
+            branchRow.warehouse_ids.add(warehouse?.id || `warehouse-${branchId}`)
+            branchRow.warehouse_names.add(warehouse?.name_ar || 'مستودع غير مسمى')
+            branchRow.product_lines += 1
+            branchRow.total_quantity += quantity
+            branchRow.total_available += available
+            branchRow.total_reserved += reserved
+            branchRow.total_value += quantity * avgCost
+            if (quantity <= minStock) branchRow.low_stock_count += 1
+            if (quantity <= 0) branchRow.out_of_stock_count += 1
+        }
+
+        const rows = Array.from(branchMap.values())
+            .map((row) => ({
+                branch_id: row.branch_id,
+                branch_name: row.branch_name,
+                warehouse_count: row.warehouse_ids.size,
+                warehouse_names: Array.from(row.warehouse_names),
+                product_lines: row.product_lines,
+                total_quantity: Math.round(row.total_quantity * 100) / 100,
+                total_available: Math.round(row.total_available * 100) / 100,
+                total_reserved: Math.round(row.total_reserved * 100) / 100,
+                total_value: Math.round(row.total_value * 100) / 100,
+                low_stock_count: row.low_stock_count,
+                out_of_stock_count: row.out_of_stock_count
+            }))
+            .sort((a, b) => a.branch_name.localeCompare(b.branch_name, 'ar'))
+
+        const summary = rows.reduce((acc, row) => {
+            acc.total_branches += 1
+            acc.total_warehouses += row.warehouse_count
+            acc.total_product_lines += row.product_lines
+            acc.total_quantity += row.total_quantity
+            acc.total_available += row.total_available
+            acc.total_reserved += row.total_reserved
+            acc.total_value += row.total_value
+            acc.low_stock_count += row.low_stock_count
+            acc.out_of_stock_count += row.out_of_stock_count
+            return acc
+        }, {
+            total_branches: 0,
+            total_warehouses: 0,
+            total_product_lines: 0,
+            total_quantity: 0,
+            total_available: 0,
+            total_reserved: 0,
+            total_value: 0,
+            low_stock_count: 0,
+            out_of_stock_count: 0
+        })
+
+        summary.total_quantity = Math.round(summary.total_quantity * 100) / 100
+        summary.total_available = Math.round(summary.total_available * 100) / 100
+        summary.total_reserved = Math.round(summary.total_reserved * 100) / 100
+        summary.total_value = Math.round(summary.total_value * 100) / 100
+
+        res.json({ data: rows, summary })
+    } catch (error) {
+        console.error('Get branch inventory summary error:', error)
+        res.status(500).json({ message: 'خطأ في جلب ملخص المخزون حسب الفرع' })
+    }
+})
+
+/**
  * GET /api/inventory/stock/:menuId
  * Get stock details for a specific product
  */
@@ -142,9 +322,11 @@ router.get('/stock/:menuId', authenticate, async (req, res) => {
 router.get('/alerts', authenticate, async (req, res) => {
     try {
         const { warehouse_id } = req.query
+        const expiryAlertDays = Math.max(0, parseInt(req.query.expiry_days, 10) || 30)
 
         // Low stock items
         const lowStock = await StockService.getLowStockItems(warehouse_id)
+        const { expired, expiringSoon } = await StockService.getExpiryAlerts(warehouse_id, expiryAlertDays)
 
         // Out of stock items
         const outOfStock = await Stock.findAll({
@@ -165,7 +347,8 @@ router.get('/alerts', authenticate, async (req, res) => {
         const notificationService = req.app.get('notificationService')
         const lowStockTargetRoles = ['admin', 'manager']
 
-        const sendLowStockNotification = async ({
+        const sendInventoryNotification = async ({
+            type = 'low_stock',
             entityId,
             title,
             message,
@@ -176,7 +359,7 @@ router.get('/alerts', authenticate, async (req, res) => {
             for (const role of lowStockTargetRoles) {
                 const existingNotification = await Notification.findOne({
                     where: {
-                        type: 'low_stock',
+                        type,
                         target_role: role,
                         title,
                         entity_id: String(entityId),
@@ -187,7 +370,7 @@ router.get('/alerts', authenticate, async (req, res) => {
 
                 if (!existingNotification && notificationService) {
                     await notificationService.send({
-                        type: 'low_stock',
+                        type,
                         title,
                         message,
                         target_role: role,
@@ -203,7 +386,7 @@ router.get('/alerts', authenticate, async (req, res) => {
         }
 
         for (const item of lowStock) {
-            await sendLowStockNotification({
+            await sendInventoryNotification({
                 entityId: item.menuId,
                 title: 'تنبيه: مخزون منخفض',
                 message: `المنتج "${item.productName}" وصل إلى ${item.quantity} قطعة. (الحد الأدنى: ${item.minStock})`,
@@ -215,13 +398,37 @@ router.get('/alerts', authenticate, async (req, res) => {
 
         // Also for out of stock
         for (const s of outOfStock) {
-            await sendLowStockNotification({
+            await sendInventoryNotification({
                 entityId: s.menu_id,
                 title: 'تنبيه: نفاذ المخزون!',
                 message: `المنتج "${s.Menu?.name_ar}" انتهى تماماً من مستودع ${s.Warehouse?.name_ar}`,
                 priority: 'urgent',
                 icon: '🚫',
                 branchId: s.Warehouse?.branch_id || null
+            })
+        }
+
+        for (const item of expired) {
+            await sendInventoryNotification({
+                type: 'system',
+                entityId: item.movementId,
+                title: 'تنبيه: منتج منتهي الصلاحية',
+                message: `المنتج "${item.productName}"${item.batchNumber ? ` - تشغيلة ${item.batchNumber}` : ''} انتهت صلاحيته بتاريخ ${item.expiryDate}.`,
+                priority: 'urgent',
+                icon: '🧪',
+                branchId: item.branchId || null
+            })
+        }
+
+        for (const item of expiringSoon) {
+            await sendInventoryNotification({
+                type: 'system',
+                entityId: item.movementId,
+                title: 'تنبيه: قرب انتهاء الصلاحية',
+                message: `المنتج "${item.productName}"${item.batchNumber ? ` - تشغيلة ${item.batchNumber}` : ''} سينتهي خلال ${item.daysRemaining} يوم.`,
+                priority: item.daysRemaining <= 7 ? 'high' : 'normal',
+                icon: '⏰',
+                branchId: item.branchId || null
             })
         }
 
@@ -238,9 +445,13 @@ router.get('/alerts', authenticate, async (req, res) => {
                     quantity: parseFloat(s.quantity || 0),
                     minStock: parseFloat(s.min_stock || 0)
                 })),
+                expired,
+                expiringSoon,
                 summary: {
                     lowStockCount: lowStock.length,
-                    outOfStockCount: outOfStock.length
+                    outOfStockCount: outOfStock.length,
+                    expiredCount: expired.length,
+                    expiringSoonCount: expiringSoon.length
                 }
             }
         })
@@ -260,7 +471,7 @@ router.get('/valuation', authenticate, authorize('admin', 'manager'), async (req
         const valuation = await StockService.getInventoryValuation(warehouse_id)
 
         // Debug logging
-        console.log('ðŸ“Š Valuation Response:', {
+        console.log('[inventory] valuation response:', {
             total_value: valuation.total_value,
             total_items: valuation.total_items,
             by_warehouse_count: valuation.by_warehouse?.length,
@@ -325,7 +536,10 @@ router.post('/adjust',
         body('adjustment_type').isIn(['damage', 'loss', 'theft', 'count', 'expired', 'other']).withMessage('نوع التعديل غير صالح'),
         body('quantity_change').isFloat({ min: -10000, max: 10000 }).withMessage('الكمية غير صالحة أو خارج النطاق المسموح'),
         body('unit_cost').optional().isFloat({ min: 0, max: 1000000 }).withMessage('تكلفة الوحدة غير صالحة'),
-        body('reason').notEmpty().withMessage('السبب مطلوب').isLength({ max: 500 }).withMessage('السبب يجب ألا يتجاوز 500 حرف').trim()
+        body('reason').notEmpty().withMessage('السبب مطلوب').isLength({ max: 500 }).withMessage('السبب يجب ألا يتجاوز 500 حرف').trim(),
+        body('batch_number').optional({ nullable: true }).isString().withMessage('رقم التشغيلة يجب أن يكون نصًا'),
+        body('production_date').optional({ nullable: true }).isISO8601().withMessage('تاريخ الإنتاج غير صالح'),
+        body('expiry_date').optional({ nullable: true }).isISO8601().withMessage('تاريخ الانتهاء غير صالح')
     ],
     async (req, res) => {
         const errors = validationResult(req)
@@ -337,6 +551,7 @@ router.post('/adjust',
 
         try {
             const { menu_id, warehouse_id, adjustment_type, quantity_change, unit_cost, reason } = req.body
+            const dateFields = sanitizeInventoryDateFields(req.body)
 
             // Get current stock
             const stock = await Stock.findOne({
@@ -395,7 +610,13 @@ router.post('/adjust',
                     sourceType: 'adjustment',
                     sourceId: adjustment.id,
                     userId: req.user.userId
-                }, { transaction, notes: reason })
+                }, {
+                    transaction,
+                    notes: reason,
+                    batchNumber: dateFields.batch_number,
+                    productionDate: dateFields.production_date,
+                    expiryDate: dateFields.expiry_date
+                })
 
                 adjustmentValue = Math.abs(quantity_change) * parseFloat(unitCostForGain)
             } else {
@@ -431,6 +652,9 @@ router.post('/adjust',
         } catch (error) {
             await transaction.rollback()
             console.error('Adjustment error:', error)
+            if (error.statusCode === 400) {
+                return res.status(400).json({ message: error.message })
+            }
             res.status(500).json({ message: error.message || 'خطأ في تعديل المخزون' })
         }
     }
@@ -447,7 +671,10 @@ router.post('/assemble',
         body('menu_id').isUUID().withMessage('معرف الصنف غير صالح'),
         body('warehouse_id').isUUID().withMessage('معرف المستودع غير صالح'),
         body('quantity').isFloat({ min: 0.001, max: 1000000 }).withMessage('الكمية غير صالحة'),
-        body('notes').optional({ nullable: true }).isLength({ max: 500 }).withMessage('الملاحظات طويلة جداً')
+        body('notes').optional({ nullable: true }).isLength({ max: 500 }).withMessage('الملاحظات طويلة جداً'),
+        body('batch_number').optional({ nullable: true }).isString().withMessage('رقم التشغيلة يجب أن يكون نصًا'),
+        body('production_date').optional({ nullable: true }).isISO8601().withMessage('تاريخ الإنتاج غير صالح'),
+        body('expiry_date').optional({ nullable: true }).isISO8601().withMessage('تاريخ الانتهاء غير صالح')
     ],
     async (req, res) => {
         const errors = validationResult(req)
@@ -459,6 +686,7 @@ router.post('/assemble',
 
         try {
             const { menu_id, warehouse_id, quantity, notes } = req.body
+            const dateFields = sanitizeInventoryDateFields(req.body)
             const productionQty = parseFloat(quantity)
             const sourceId = uuidv4()
             const userId = req.user?.userId || req.user?.id || null
@@ -546,6 +774,9 @@ router.post('/assemble',
                 userId: userId || 'system'
             }, {
                 transaction,
+                batchNumber: dateFields.batch_number,
+                productionDate: dateFields.production_date,
+                expiryDate: dateFields.expiry_date,
                 notes: notes || `Assembly produce for ${product.name_ar}`
             })
 
@@ -567,6 +798,9 @@ router.post('/assemble',
         } catch (error) {
             await transaction.rollback()
             console.error('Assembly error:', error)
+            if (error.statusCode === 400) {
+                return res.status(400).json({ message: error.message })
+            }
             return res.status(500).json({ message: error.message || 'خطأ في عملية التصنيع' })
         }
     }
@@ -601,7 +835,7 @@ router.get('/adjustments', authenticate, authorize('admin', 'manager'), async (r
         })
     } catch (error) {
         console.error('Get adjustments error:', error)
-        res.status(500).json({ message: 'خطأ ف�` ج�ب ا�تعد�`�ات' })
+        res.status(500).json({ message: 'خطأ في جلب سجل التعديلات' })
     }
 })
 
@@ -615,9 +849,9 @@ router.put('/stock/:menuId/settings',
     authenticate,
     authorize('admin', 'manager'),
     [
-        body('warehouse_id').isUUID().withMessage('�&عرف ا��&ست��دع غ�`ر صا�ح'),
-        body('min_stock').optional().isFloat({ min: 0 }).withMessage('ا�حد ا�أد� �0 غ�`ر صا�ح'),
-        body('max_stock').optional().isFloat({ min: 0 }).withMessage('ا�حد ا�أ�ص�0 غ�`ر صا�ح')
+        body('warehouse_id').isUUID().withMessage('معرف المستودع غير صالح'),
+        body('min_stock').optional().isFloat({ min: 0 }).withMessage('الحد الأدنى غير صالح'),
+        body('max_stock').optional().isFloat({ min: 0 }).withMessage('الحد الأقصى غير صالح')
     ],
     async (req, res) => {
         const errors = validationResult(req)
@@ -648,12 +882,12 @@ router.put('/stock/:menuId/settings',
             }
 
             res.json({
-                message: 'ت�& تحد�`ث إعدادات ا��&خز��� ',
+                message: 'تم تحديث إعدادات المخزون',
                 data: stock
             })
         } catch (error) {
             console.error('Update stock settings error:', error)
-            res.status(500).json({ message: 'خطأ ف�` تحد�`ث ا�إعدادات' })
+            res.status(500).json({ message: 'خطأ في تحديث الإعدادات' })
         }
     }
 )
@@ -668,8 +902,8 @@ router.post('/quick-product',
     authenticate,
     authorize('admin', 'manager'),
     [
-        body('name_ar').notEmpty().withMessage('اس�& ا��&� تج با�عرب�`ة �&ط���ب'),
-        body('item_type').optional().isIn(['raw_material', 'consumable']).withMessage('� ��ع ا��&� تج غ�`ر صا�ح'),
+        body('name_ar').notEmpty().withMessage('اسم المنتج بالعربية مطلوب'),
+        body('item_type').optional().isIn(['raw_material', 'consumable']).withMessage('نوع المنتج غير صالح'),
         body('sku').optional(),
         body('barcode').optional(),
         body('cost_price').optional().isFloat({ min: 0 }),
@@ -717,7 +951,7 @@ router.post('/quick-product',
                 const existingBarcode = await Menu.findOne({ where: { barcode } })
                 if (existingBarcode) {
                     await transaction.rollback()
-                    return res.status(400).json({ message: 'ا�بارْ��د �&��ج��د با�فع�' })
+                    return res.status(400).json({ message: 'الباركود موجود بالفعل' })
                 }
             }
 
@@ -739,7 +973,7 @@ router.post('/quick-product',
             }) : null
             if (!branch) {
                 await transaction.rollback()
-                return res.status(400).json({ message: '�ا ت��جد فر��ع �&سج�ة' })
+                return res.status(400).json({ message: 'لا توجد فروع مسجلة' })
             }
 
             // Create the product
@@ -786,13 +1020,13 @@ router.post('/quick-product',
             await transaction.commit()
 
             res.status(201).json({
-                message: 'ت�& إ� شاء ا��&� تج ب� جاح',
+                message: 'تم إنشاء المنتج بنجاح',
                 data: product
             })
         } catch (error) {
             await transaction.rollback()
             console.error('Quick product creation error:', error)
-            res.status(500).json({ message: 'خطأ ف�` إ� شاء ا��&� تج' })
+            res.status(500).json({ message: 'خطأ في إنشاء المنتج' })
         }
     }
 )
@@ -836,7 +1070,7 @@ router.get('/products', authenticate, async (req, res) => {
         res.json({ data: products })
     } catch (error) {
         console.error('Get inventory products error:', error)
-        res.status(500).json({ message: 'خطأ ف�` ج�ب ا��&� تجات' })
+        res.status(500).json({ message: 'خطأ في جلب المنتجات' })
     }
 })
 

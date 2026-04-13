@@ -39,3 +39,21 @@ backend/backups/
 backend/data/backups/
 backend/src/scripts/reports/
 pos/dist/
+website/dist/
+kds/dist/
+
+# Database files
+*.db
+backend/data/*.db
+
+# Uploads (user-generated content)
+backend/uploads/
+
+# Sensitive files
+backend/token.txt
+backend/tmp/
+backend/tmp_export/
+backend/exports/
+
+# TestSprite
+testsprite_tests/

@@ -5,6 +5,7 @@ import {
     Button,
     Chip,
     CircularProgress,
+    Grid,
     MenuItem,
     Paper,
     Stack,
@@ -36,6 +37,12 @@ const leaveStatusOptions = [
 
 const leaveTypeLabel = Object.fromEntries(leaveTypeOptions.map((item) => [item.value, item.label]))
 const leaveStatusLabel = Object.fromEntries(leaveStatusOptions.map((item) => [item.value, item.label]))
+const leaveStatusColor = {
+    pending: 'warning',
+    approved: 'success',
+    rejected: 'error',
+    cancelled: 'default'
+}
 
 const defaultLeaveForm = () => ({
     employee_id: '',
@@ -46,6 +53,18 @@ const defaultLeaveForm = () => ({
     reason: '',
     notes: ''
 })
+
+const MetricCard = ({ title, value, subtitle, color = '#1976d2' }) => (
+    <Paper sx={{ p: 2.25, borderRadius: 2, borderInlineStart: `4px solid ${color}`, height: '100%' }}>
+        <Typography variant="body2" color="text.secondary">{title}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.75 }}>{value}</Typography>
+        {subtitle && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                {subtitle}
+            </Typography>
+        )}
+    </Paper>
+)
 
 export default function HrLeaveManagement() {
     const [loading, setLoading] = useState(true)
@@ -59,24 +78,42 @@ export default function HrLeaveManagement() {
 
     const [leaveRows, setLeaveRows] = useState([])
     const [balanceRows, setBalanceRows] = useState([])
-
     const [form, setForm] = useState(defaultLeaveForm)
-    const [summaryRows, setSummaryRows] = useState([])
 
     const summary = useMemo(() => {
-        const counters = {
-            pending: 0,
-            approved: 0,
-            rejected: 0,
-            cancelled: 0
-        }
-        summaryRows.forEach((row) => {
-            const status = row.status || row.dataValues?.status
-            const count = Number(row.count || row.dataValues?.count || 0)
-            if (status in counters) counters[status] += count
+        const counters = { pending: 0, approved: 0, rejected: 0, cancelled: 0 }
+        leaveRows.forEach((row) => {
+            if (row.status in counters) counters[row.status] += 1
         })
         return counters
-    }, [summaryRows])
+    }, [leaveRows])
+
+    const selectedEmployeeRecord = useMemo(
+        () => employees.find((item) => item.id === selectedEmployee) || null,
+        [employees, selectedEmployee]
+    )
+
+    const selectedEmployeeLabel = useMemo(() => {
+        if (!selectedEmployeeRecord) return 'الموظف المحدد'
+        return `${selectedEmployeeRecord.employee_code || ''} - ${selectedEmployeeRecord.first_name_ar || ''} ${selectedEmployeeRecord.last_name_ar || ''}`.trim()
+    }, [selectedEmployeeRecord])
+
+    const leaveInsights = useMemo(() => {
+        const totalDays = leaveRows.reduce((sum, row) => sum + Number(row.number_of_days || 0), 0)
+        const approvedDays = leaveRows
+            .filter((row) => row.status === 'approved')
+            .reduce((sum, row) => sum + Number(row.number_of_days || 0), 0)
+        const annualBalance = balanceRows.find((row) => row.leave_type === 'annual')
+        const latestLeave = leaveRows[0] || null
+
+        return {
+            totalRequests: leaveRows.length,
+            totalDays,
+            approvedDays,
+            annualRemaining: Number(annualBalance?.remaining || 0),
+            latestLeave
+        }
+    }, [leaveRows, balanceRows])
 
     const fetchEmployees = useCallback(async () => {
         const response = await hrAPI.getEmployees({ limit: 500 })
@@ -90,14 +127,12 @@ export default function HrLeaveManagement() {
 
     const fetchEmployeeData = useCallback(async () => {
         if (!selectedEmployee) return
-        const [leavesRes, balanceRes, summaryRes] = await Promise.all([
+        const [leavesRes, balanceRes] = await Promise.all([
             hrAPI.getEmployeeLeaves(selectedEmployee, { status: statusFilter || undefined }),
-            hrAPI.getLeaveBalance(selectedEmployee, { year: Number(year) }),
-            hrAPI.getLeaveSummary()
+            hrAPI.getLeaveBalance(selectedEmployee, { year: Number(year) })
         ])
         setLeaveRows(leavesRes.data?.data || [])
         setBalanceRows(balanceRes.data?.data || [])
-        setSummaryRows(summaryRes.data?.data || [])
     }, [selectedEmployee, statusFilter, year])
 
     const fetchData = useCallback(async () => {
@@ -189,111 +224,194 @@ export default function HrLeaveManagement() {
                 </Alert>
             )}
 
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                        select
-                        fullWidth
-                        label="الموظف"
-                        value={selectedEmployee}
-                        onChange={(e) => setSelectedEmployee(e.target.value)}
-                    >
-                        {employees.map((employee) => (
-                            <MenuItem key={employee.id} value={employee.id}>
-                                {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        select
-                        label="حالة الطلب"
-                        sx={{ minWidth: 170 }}
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <MenuItem value="">الكل</MenuItem>
-                        {leaveStatusOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        label="السنة المالية"
-                        type="number"
-                        sx={{ minWidth: 160 }}
-                        value={year}
-                        onChange={(e) => setYear(e.target.value)}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="طلبات الإجازة"
+                        value={leaveInsights.totalRequests}
+                        subtitle={selectedEmployeeRecord?.employee_code || 'اختر موظفًا'}
+                        color="#1565c0"
                     />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="إجمالي الأيام المطلوبة"
+                        value={leaveInsights.totalDays}
+                        subtitle="كل الطلبات المعروضة"
+                        color="#00838f"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="أيام معتمدة"
+                        value={leaveInsights.approvedDays}
+                        subtitle={`معتمدة: ${summary.approved}`}
+                        color="#2e7d32"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="المتبقي السنوي"
+                        value={leaveInsights.annualRemaining.toFixed(2)}
+                        subtitle={`رصيد السنوية ${year}`}
+                        color="#ef6c00"
+                    />
+                </Grid>
+            </Grid>
+
+            <Paper sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>فلاتر الإجازات</Typography>
+                <Grid container spacing={1.5}>
+                    <Grid item xs={12} md={7}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الموظف"
+                            value={selectedEmployee}
+                            onChange={(e) => setSelectedEmployee(e.target.value)}
+                        >
+                            {employees.map((employee) => (
+                                <MenuItem key={employee.id} value={employee.id}>
+                                    {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="حالة الطلب"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                            <MenuItem value="">الكل</MenuItem>
+                            {leaveStatusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                        <TextField
+                            fullWidth
+                            label="السنة المالية"
+                            type="number"
+                            value={year}
+                            onChange={(e) => setYear(e.target.value)}
+                        />
+                    </Grid>
+                </Grid>
+            </Paper>
+
+            <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.25 }}>ملخص الحالات</Typography>
+                <Stack direction="row" spacing={1.2} flexWrap="wrap" useFlexGap>
+                    <Chip color="warning" label={`معلقة: ${summary.pending}`} />
+                    <Chip color="success" label={`معتمدة: ${summary.approved}`} />
+                    <Chip color="error" label={`مرفوضة: ${summary.rejected}`} />
+                    <Chip label={`ملغاة: ${summary.cancelled}`} />
                 </Stack>
             </Paper>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2} sx={{ mb: 2 }}>
-                <Chip color="warning" label={`معلقة: ${summary.pending}`} />
-                <Chip color="success" label={`معتمدة: ${summary.approved}`} />
-                <Chip color="error" label={`مرفوضة: ${summary.rejected}`} />
-                <Chip label={`ملغاة: ${summary.cancelled}`} />
-            </Stack>
-
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>طلب إجازة جديد</Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                        select
-                        label="نوع الإجازة"
-                        sx={{ minWidth: 170 }}
-                        value={form.leave_type}
-                        onChange={(e) => setForm((prev) => ({ ...prev, leave_type: e.target.value }))}
-                    >
-                        {leaveTypeOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        label="من تاريخ"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={form.start_date}
-                        onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
-                    />
-                    <TextField
-                        label="إلى تاريخ"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={form.end_date}
-                        onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
-                    />
-                    <TextField
-                        label="عدد الأيام"
-                        type="number"
-                        sx={{ minWidth: 140 }}
-                        value={form.number_of_days}
-                        onChange={(e) => setForm((prev) => ({ ...prev, number_of_days: e.target.value }))}
-                    />
-                </Stack>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 1.5 }}>
-                    <TextField
-                        label="السبب"
-                        fullWidth
-                        value={form.reason}
-                        onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
-                    />
-                    <TextField
-                        label="ملاحظات"
-                        fullWidth
-                        value={form.notes}
-                        onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                    />
-                    <Button
-                        variant="contained"
-                        startIcon={<SaveIcon />}
-                        onClick={createLeaveRequest}
-                        disabled={saving || !selectedEmployee}
-                    >
-                        تسجيل الطلب
-                    </Button>
-                </Stack>
+            <Paper sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ mb: 1.25, fontWeight: 700 }}>طلب إجازة جديد</Typography>
+                {selectedEmployeeRecord && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.75 }}>
+                        {selectedEmployeeRecord.employee_code} | {selectedEmployeeRecord.department?.name_ar || 'بدون قسم'} | {selectedEmployeeRecord.designation?.title_ar || 'بدون مسمى'}
+                    </Typography>
+                )}
+                <Grid container spacing={1.5}>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="نوع الإجازة"
+                            value={form.leave_type}
+                            onChange={(e) => setForm((prev) => ({ ...prev, leave_type: e.target.value }))}
+                        >
+                            {leaveTypeOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="من تاريخ"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={form.start_date}
+                            onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="إلى تاريخ"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={form.end_date}
+                            onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="عدد الأيام"
+                            type="number"
+                            value={form.number_of_days}
+                            onChange={(e) => setForm((prev) => ({ ...prev, number_of_days: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                        <TextField
+                            fullWidth
+                            label="السبب"
+                            value={form.reason}
+                            onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                        <TextField
+                            fullWidth
+                            label="ملاحظات"
+                            value={form.notes}
+                            onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                        <Button
+                            fullWidth
+                            sx={{ height: '100%', minHeight: 56 }}
+                            variant="contained"
+                            startIcon={<SaveIcon />}
+                            onClick={createLeaveRequest}
+                            disabled={saving || !selectedEmployee}
+                        >
+                            تسجيل الطلب
+                        </Button>
+                    </Grid>
+                </Grid>
             </Paper>
 
-            <Paper sx={{ mb: 2, overflowX: 'auto' }}>
+            <Paper sx={{ mb: 2, overflowX: 'auto', borderRadius: 2 }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.25}>
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>سجل طلبات الإجازة</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {selectedEmployeeLabel} - {leaveInsights.totalRequests} طلب
+                            </Typography>
+                        </Box>
+                        {leaveInsights.latestLeave && (
+                            <Chip
+                                color={leaveStatusColor[leaveInsights.latestLeave.status] || 'default'}
+                                variant="outlined"
+                                label={`آخر طلب: ${leaveTypeLabel[leaveInsights.latestLeave.leave_type] || leaveInsights.latestLeave.leave_type} - ${leaveStatusLabel[leaveInsights.latestLeave.status] || leaveInsights.latestLeave.status}`}
+                            />
+                        )}
+                    </Stack>
+                </Box>
                 {loading ? (
                     <Box sx={{ p: 5, display: 'flex', justifyContent: 'center' }}>
                         <CircularProgress />
@@ -325,13 +443,13 @@ export default function HrLeaveManagement() {
                                     <TableCell>
                                         <Chip
                                             size="small"
-                                            color={row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'error' : 'warning'}
+                                            color={leaveStatusColor[row.status] || 'default'}
                                             label={leaveStatusLabel[row.status] || row.status}
                                         />
                                     </TableCell>
                                     <TableCell>{row.reason || '-'}</TableCell>
                                     <TableCell align="center">
-                                        <Stack direction="row" spacing={0.7} justifyContent="center">
+                                        <Stack direction="row" spacing={0.7} justifyContent="center" flexWrap="wrap" useFlexGap>
                                             <Button size="small" color="success" variant="outlined" onClick={() => updateLeaveStatus(row.id, 'approved')}>
                                                 اعتماد
                                             </Button>
@@ -350,11 +468,11 @@ export default function HrLeaveManagement() {
                 )}
             </Paper>
 
-            <Paper sx={{ overflowX: 'auto' }}>
-                <Box sx={{ p: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>أرصدة الإجازات - {year}</Typography>
+            <Paper sx={{ overflowX: 'auto', borderRadius: 2 }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>أرصدة الإجازات - {year}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        يمكن تعديل الأرصدة الموجودة. إنشاء رصيد جديد يتم تلقائيًا عند اعتماد الإجازة أو عبر سكربت إداري.
+                        تعديل الأرصدة السنوية للموظف المحدد وحفظها مباشرة
                     </Typography>
                 </Box>
                 <Table size="small">
@@ -364,7 +482,7 @@ export default function HrLeaveManagement() {
                             <TableCell>رصيد افتتاحي</TableCell>
                             <TableCell>مخصص</TableCell>
                             <TableCell>مستخدم</TableCell>
-                            <TableCell>مرحّل</TableCell>
+                            <TableCell>مرحل</TableCell>
                             <TableCell>المتبقي</TableCell>
                             <TableCell align="center">إجراء</TableCell>
                         </TableRow>
@@ -423,4 +541,3 @@ export default function HrLeaveManagement() {
         </Box>
     )
 }
-

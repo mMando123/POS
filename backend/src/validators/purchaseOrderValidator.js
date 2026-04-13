@@ -46,6 +46,10 @@ exports.receivePOValidator = [
         .optional()
         .isString().withMessage('Ø±Ù‚Ù… Ø§Ù„Ø¯ÙØ¹Ø© ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ù†ØµØ§Ù‹'),
 
+    body('items.*.production_date')
+        .optional()
+        .isISO8601().withMessage('تاريخ الإنتاج غير صالح'),
+
     body('items.*.expiry_date')
         .optional()
         .isISO8601().withMessage('ØªØ§Ø±ÙŠØ® Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ© ØºÙŠØ± ØµØ§Ù„Ø­')

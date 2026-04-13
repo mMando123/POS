@@ -19,7 +19,7 @@ router.get('/validate', authenticate, async (req, res) => {
         res.status(500).json({
             valid: false,
             hasShift: false,
-            message: 'Ø®Ø·Ø£ ÙÙŠ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„ÙˆØ±Ø¯ÙŠØ©'
+            message: 'خطأ في التحقق من الوردية'
         })
     }
 })
@@ -29,9 +29,9 @@ router.get('/validate', authenticate, async (req, res) => {
  * This is the RECOMMENDED endpoint for POS clients
  * 
  * Behavior:
- * - If user has an open shift â†’ resume it (return existing shift)
- * - If no open shift AND starting_cash provided â†’ open new shift
- * - If no open shift AND no starting_cash â†’ return action: 'request_opening'
+ * - If user has an open shift -> resume it (return existing shift)
+ * - If no open shift AND starting_cash provided -> open new shift
+ * - If no open shift AND no starting_cash -> return action: 'request_opening'
  * 
  * This ensures:
  * - Only ONE open shift per user at any time
@@ -39,7 +39,7 @@ router.get('/validate', authenticate, async (req, res) => {
  * - Seamless POS experience across devices/sessions
  */
 router.post('/resume-or-open', authenticate, requirePermission(PERMISSIONS.PAYMENT_PROCESS), [
-    body('starting_cash').optional().isFloat({ min: 0 }).withMessage('Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ø§ÙØªØªØ§Ø­ÙŠ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹'),
+    body('starting_cash').optional().isFloat({ min: 0 }).withMessage('المبلغ الافتتاحي يجب أن يكون رقمًا موجبًا'),
     validate
 ], async (req, res) => {
     try {
@@ -80,7 +80,7 @@ router.post('/resume-or-open', authenticate, requirePermission(PERMISSIONS.PAYME
         console.error('Resume or open shift error:', error)
         res.status(500).json({
             success: false,
-            message: 'Ø®Ø·Ø£ ÙÙŠ Ø§Ø³ØªØ¦Ù†Ø§Ù Ø£Ùˆ ÙØªØ­ Ø§Ù„ÙˆØ±Ø¯ÙŠØ©'
+            message: 'خطأ في استئناف أو فتح الوردية'
         })
     }
 })
@@ -92,7 +92,7 @@ router.get('/open', authenticate, authorize('admin', 'manager'), async (req, res
         res.json({ data: shifts })
     } catch (error) {
         console.error('Get open shifts error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„ÙˆØ±Ø¯ÙŠØ§Øª Ø§Ù„Ù…ÙØªÙˆØ­Ø©' })
+        res.status(500).json({ message: 'خطأ في جلب الورديات المفتوحة' })
     }
 })
 
@@ -133,7 +133,7 @@ router.get('/performance', authenticate, authorize('admin', 'manager'), async (r
             if (!cashierMap.has(userId)) {
                 cashierMap.set(userId, {
                     cashier_id: userId,
-                    cashier_name: shift.User?.name_ar || 'ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙ',
+                    cashier_name: shift.User?.name_ar || 'غير معروف',
                     username: shift.User?.username,
                     last_login: shift.User?.last_login,
                     shifts: [],
@@ -192,7 +192,7 @@ router.get('/performance', authenticate, authorize('admin', 'manager'), async (r
                 : 0
             data.working_hours = Math.floor(data.total_working_minutes / 60)
             data.working_minutes = data.total_working_minutes % 60
-            data.formatted_working_time = `${data.working_hours}Ø³ ${data.working_minutes}Ø¯`
+            data.formatted_working_time = `${data.working_hours}س ${data.working_minutes}د`
             performanceData.push(data)
         }
 
@@ -206,7 +206,7 @@ router.get('/performance', authenticate, authorize('admin', 'manager'), async (r
         })
     } catch (error) {
         console.error('Get performance error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø£Ø¯Ø§Ø¡' })
+        res.status(500).json({ message: 'خطأ في جلب تقرير الأداء' })
     }
 })
 
@@ -272,13 +272,13 @@ router.get('/current', authenticate, async (req, res) => {
         })
     } catch (error) {
         console.error('Get current shift error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø®Ø§Ø¯Ù…' })
+        res.status(500).json({ message: 'خطأ في الخادم' })
     }
 })
 
 // Start new shift (uses atomic operation to prevent race conditions)
 router.post('/start', authenticate, requirePermission(PERMISSIONS.PAYMENT_PROCESS), [
-    body('starting_cash').isFloat({ min: 0 }).withMessage('Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ø§ÙØªØªØ§Ø­ÙŠ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹'),
+    body('starting_cash').isFloat({ min: 0 }).withMessage('المبلغ الافتتاحي يجب أن يكون رقمًا موجبًا'),
     validate
 ], async (req, res) => {
     try {
@@ -313,13 +313,13 @@ router.post('/start', authenticate, requirePermission(PERMISSIONS.PAYMENT_PROCES
         })
     } catch (error) {
         console.error('Start shift error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ ÙØªØ­ Ø§Ù„ÙˆØ±Ø¯ÙŠØ©' })
+        res.status(500).json({ message: 'خطأ في فتح الوردية' })
     }
 })
 
 // End shift
 router.post('/end', authenticate, requirePermission(PERMISSIONS.PAYMENT_PROCESS), [
-    body('ending_cash').isFloat({ min: 0 }).withMessage('Ending cash must be a positive number'),
+    body('ending_cash').isFloat({ min: 0 }).withMessage('المبلغ الختامي يجب أن يكون رقمًا موجبًا'),
     validate
 ], async (req, res) => {
     try {
@@ -328,7 +328,7 @@ router.post('/end', authenticate, requirePermission(PERMISSIONS.PAYMENT_PROCESS)
 
         if (!result.success) {
             const statusCode = result.error === 'NO_SHIFT' ? 404 : 400
-            return res.status(statusCode).json({ message: result.message || 'Unable to close shift' })
+            return res.status(statusCode).json({ message: result.message || 'تعذر إغلاق الوردية' })
         }
 
         // Audit log - shift closed (non-blocking)
@@ -355,13 +355,13 @@ router.post('/end', authenticate, requirePermission(PERMISSIONS.PAYMENT_PROCESS)
         })
     } catch (error) {
         console.error('End shift error:', error)
-        res.status(500).json({ message: 'Server error while closing shift' })
+        res.status(500).json({ message: 'خطأ في الخادم أثناء إغلاق الوردية' })
     }
 })
 
 // End specific shift (Admin only)
 router.post('/:id/end', authenticate, authorize('admin'), [
-    body('ending_cash').isFloat({ min: 0 }).withMessage('Ending cash must be a positive number'),
+    body('ending_cash').isFloat({ min: 0 }).withMessage('المبلغ الختامي يجب أن يكون رقمًا موجبًا'),
     validate
 ], async (req, res) => {
     try {
@@ -377,7 +377,7 @@ router.post('/:id/end', authenticate, authorize('admin'), [
 
         if (!result.success) {
             const statusCode = result.error === 'NO_SHIFT' ? 404 : 400
-            return res.status(statusCode).json({ message: result.message || 'Unable to close shift' })
+            return res.status(statusCode).json({ message: result.message || 'تعذر إغلاق الوردية' })
         }
 
         res.json({
@@ -396,7 +396,7 @@ router.post('/:id/end', authenticate, authorize('admin'), [
         })
     } catch (error) {
         console.error('Force close shift error:', error)
-        res.status(500).json({ message: 'Server error while force closing shift' })
+        res.status(500).json({ message: 'خطأ في الخادم أثناء الإغلاق الإجباري للوردية' })
     }
 })
 
@@ -426,7 +426,7 @@ router.get('/history', authenticate, authorize('admin', 'manager'), async (req, 
                 shiftJSON.User = {
                     id: shift.user_id,
                     username: 'deleted_user',
-                    name_ar: 'Ù…ÙˆØ¸Ù Ù…Ø­Ø°ÙˆÙ'
+                    name_ar: 'موظف محذوف'
                 }
             }
             return shiftJSON
@@ -440,7 +440,7 @@ router.get('/history', authenticate, authorize('admin', 'manager'), async (req, 
         })
     } catch (error) {
         console.error('Get shift history error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ø³Ø¬Ù„' })
+        res.status(500).json({ message: 'خطأ في جلب السجل' })
     }
 })
 
@@ -455,7 +455,7 @@ router.get('/:id/report', authenticate, authorize('admin', 'manager'), async (re
         })
 
         if (!shift) {
-            return res.status(404).json({ message: 'Ø§Ù„ÙˆØ±Ø¯ÙŠØ© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©' })
+            return res.status(404).json({ message: 'الوردية غير موجودة' })
         }
 
         // Get orders for this shift
@@ -491,7 +491,7 @@ router.get('/:id/report', authenticate, authorize('admin', 'manager'), async (re
             duration: {
                 hours: durationHours,
                 minutes: durationMinutes,
-                formatted: `${durationHours}Ø³ ${durationMinutes}Ø¯`
+                formatted: `${durationHours}س ${durationMinutes}د`
             },
             financials: {
                 starting_cash: parseFloat(shift.starting_cash),
@@ -519,13 +519,13 @@ router.get('/:id/report', authenticate, authorize('admin', 'manager'), async (re
         res.json({ data: report })
     } catch (error) {
         console.error('Get shift report error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„ØªÙ‚Ø±ÙŠØ±' })
+        res.status(500).json({ message: 'خطأ في جلب التقرير' })
     }
 })
 
 // Admin review/approve shift
 router.post('/:id/review', authenticate, authorize('admin', 'manager'), [
-    body('status').isIn(['approved', 'flagged']).withMessage('Ø­Ø§Ù„Ø© ØºÙŠØ± ØµØ§Ù„Ø­Ø©'),
+    body('status').isIn(['approved', 'flagged']).withMessage('الحالة غير صالحة'),
     validate
 ], async (req, res) => {
     try {
@@ -533,11 +533,11 @@ router.post('/:id/review', authenticate, authorize('admin', 'manager'), [
 
         const shift = await Shift.findByPk(req.params.id)
         if (!shift) {
-            return res.status(404).json({ message: 'Ø§Ù„ÙˆØ±Ø¯ÙŠØ© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©' })
+            return res.status(404).json({ message: 'الوردية غير موجودة' })
         }
 
         if (shift.status !== 'closed') {
-            return res.status(400).json({ message: 'Ù„Ø§ ÙŠÙ…ÙƒÙ† Ù…Ø±Ø§Ø¬Ø¹Ø© ÙˆØ±Ø¯ÙŠØ© Ù…ÙØªÙˆØ­Ø©' })
+            return res.status(400).json({ message: 'لا يمكن مراجعة وردية مفتوحة' })
         }
 
         await shift.update({
@@ -548,12 +548,12 @@ router.post('/:id/review', authenticate, authorize('admin', 'manager'), [
         })
 
         res.json({
-            message: status === 'approved' ? 'ØªÙ… Ø§Ø¹ØªÙ…Ø§Ø¯ Ø§Ù„ÙˆØ±Ø¯ÙŠØ©' : 'ØªÙ… ØªØ¹Ù„ÙŠÙ… Ø§Ù„ÙˆØ±Ø¯ÙŠØ© Ù„Ù„Ù…Ø±Ø§Ø¬Ø¹Ø©',
+            message: status === 'approved' ? 'تم اعتماد الوردية' : 'تم إرسال الوردية للمراجعة',
             data: shift
         })
     } catch (error) {
         console.error('Review shift error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ù…Ø±Ø§Ø¬Ø¹Ø© Ø§Ù„ÙˆØ±Ø¯ÙŠØ©' })
+        res.status(500).json({ message: 'خطأ في مراجعة الوردية' })
     }
 })
 
@@ -570,7 +570,7 @@ router.get('/:id/export', authenticate, authorize('admin', 'manager'), async (re
         })
 
         if (!shift) {
-            return res.status(404).json({ message: 'Ø§Ù„ÙˆØ±Ø¯ÙŠØ© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©' })
+            return res.status(404).json({ message: 'الوردية غير موجودة' })
         }
 
         const orders = await Order.findAll({
@@ -584,22 +584,22 @@ router.get('/:id/export', authenticate, authorize('admin', 'manager'), async (re
 
         if (format === 'csv') {
             const csvData = [
-                ['ØªÙ‚Ø±ÙŠØ± Ø§Ù„ÙˆØ±Ø¯ÙŠØ©'],
-                ['Ø§Ù„ÙƒØ§Ø´ÙŠØ±', shift.User?.name_ar || 'ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙ'],
-                ['ØªØ§Ø±ÙŠØ® Ø§Ù„Ø¨Ø¯Ø¡', shift.start_time],
-                ['ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ù†ØªÙ‡Ø§Ø¡', shift.end_time || 'Ù…ÙØªÙˆØ­Ø©'],
+                ['تقرير الوردية'],
+                ['الكاشير', shift.User?.name_ar || 'غير معروف'],
+                ['تاريخ البدء', shift.start_time],
+                ['تاريخ الانتهاء', shift.end_time || 'مفتوحة'],
                 [''],
-                ['Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø§Ù„ÙŠØ©'],
-                ['Ù…Ø¨Ù„Øº Ø§Ù„Ø¨Ø¯Ø§ÙŠØ©', shift.starting_cash],
-                ['Ù…Ø¨ÙŠØ¹Ø§Øª Ù†Ù‚Ø¯ÙŠØ©', cashSales],
-                ['Ù…Ø¨ÙŠØ¹Ø§Øª Ø´Ø¨ÙƒØ©', cardSales],
-                ['Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ù…Ø¨ÙŠØ¹Ø§Øª', cashSales + cardSales],
-                ['Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ù…ØªÙˆÙ‚Ø¹', expectedCash],
-                ['Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„ÙØ¹Ù„ÙŠ', shift.ending_cash || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯'],
-                ['Ø§Ù„ÙØ±Ù‚', shift.ending_cash ? parseFloat(shift.ending_cash) - expectedCash : 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯'],
+                ['البيانات المالية'],
+                ['مبلغ البداية', shift.starting_cash],
+                ['مبيعات نقدية', cashSales],
+                ['مبيعات شبكة', cardSales],
+                ['إجمالي المبيعات', cashSales + cardSales],
+                ['المبلغ المتوقع', expectedCash],
+                ['المبلغ الفعلي', shift.ending_cash || 'غير محدد'],
+                ['الفرق', shift.ending_cash ? parseFloat(shift.ending_cash) - expectedCash : 'غير محدد'],
                 [''],
-                ['Ø¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø¨Ø§Øª', orders.length],
-                ['Ø­Ø§Ù„Ø© Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø©', shift.review_status]
+                ['عدد الطلبات', orders.length],
+                ['حالة المراجعة', shift.review_status]
             ].map(row => row.join(',')).join('\n')
 
             res.setHeader('Content-Type', 'text/csv; charset=utf-8')
@@ -619,7 +619,7 @@ router.get('/:id/export', authenticate, authorize('admin', 'manager'), async (re
         })
     } catch (error) {
         console.error('Export shift error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ ØªØµØ¯ÙŠØ± Ø§Ù„ØªÙ‚Ø±ÙŠØ±' })
+        res.status(500).json({ message: 'خطأ في تصدير التقرير' })
     }
 })
 

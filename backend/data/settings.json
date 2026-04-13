@@ -1,6 +1,6 @@
 {
   "store": {
-    "storeName": "مطعم الذواقة",
+    "storeName": "مارجريتا",
     "storeNameEn": "Gourmet Restaurant",
     "phone": "0500000000",
     "address": "الرياض، المملكة العربية السعودية",
@@ -14,7 +14,7 @@
     "printers": [],
     "printDirectly": true,
     "enableCashDrawer": true,
-    "enableKitchenDisplay": false
+    "enableKitchenDisplay": true
   },
   "workflow": {
     "autoAcceptOnline": false,

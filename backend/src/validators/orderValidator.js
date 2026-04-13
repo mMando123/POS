@@ -67,6 +67,18 @@ exports.createOrderValidator = [
         .isString()
         .isLength({ max: 50 }).withMessage('Invalid batch number'),
 
+    body('items.*.selected_options')
+        .optional()
+        .isArray().withMessage('Invalid selected options'),
+
+    body('items.*.selected_options.*.group_id')
+        .optional()
+        .isUUID().withMessage('Invalid option group id'),
+
+    body('items.*.selected_options.*.option_id')
+        .optional()
+        .isUUID().withMessage('Invalid option id'),
+
     body('coupon_code')
         .optional()
         .trim()

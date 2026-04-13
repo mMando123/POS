@@ -31,6 +31,9 @@ router.post('/preview', optionalAuth, [
     body('items.*.menu_id').isUUID().withMessage('Invalid menu_id'),
     body('items.*.quantity').isInt({ min: 1, max: 1000 }).withMessage('Invalid quantity'),
     body('items.*.batch_number').optional().isLength({ max: 50 }),
+    body('items.*.selected_options').optional().isArray(),
+    body('items.*.selected_options.*.group_id').optional().isUUID().withMessage('Invalid group_id'),
+    body('items.*.selected_options.*.option_id').optional().isUUID().withMessage('Invalid option_id'),
     body('coupon_code').optional().isLength({ min: 2, max: 50 }),
     body('manual_discount').optional().isFloat({ min: 0 }),
     body('redeem_points').optional().isInt({ min: 0 }),
@@ -95,7 +98,9 @@ router.post('/preview', optionalAuth, [
                     quantity: x.quantity,
                     unit_price: PricingService.round2(x.unit_price).toFixed(2),
                     total_price: PricingService.round2(x.total_price).toFixed(2),
-                    batch_number: x.batch_number
+                    batch_number: x.batch_number,
+                    options_summary: x.options_summary || '',
+                    selected_options: Array.isArray(x.selected_options) ? x.selected_options : []
                 }))
             }
         })

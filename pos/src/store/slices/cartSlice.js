@@ -2,6 +2,13 @@ import { createSlice } from '@reduxjs/toolkit'
 
 const MAX_HELD_ORDERS = 5
 
+const resolveCartItemKey = (payload) => {
+    if (payload && typeof payload === 'object') {
+        return String(payload.cart_key || payload.menu_id || '')
+    }
+    return String(payload || '')
+}
+
 const initialState = {
     items: [],
     notes: '',
@@ -13,8 +20,9 @@ const cartSlice = createSlice({
     initialState,
     reducers: {
         addToCart: (state, action) => {
+            const incomingKey = resolveCartItemKey(action.payload)
             const existingItem = state.items.find(
-                item => item.menu_id === action.payload.menu_id
+                item => resolveCartItemKey(item) === incomingKey
             )
             if (existingItem) {
                 existingItem.quantity += action.payload.quantity || 1
@@ -29,22 +37,25 @@ const cartSlice = createSlice({
             }
         },
         removeFromCart: (state, action) => {
-            state.items = state.items.filter(item => item.menu_id !== action.payload)
+            const targetKey = resolveCartItemKey(action.payload)
+            state.items = state.items.filter(item => resolveCartItemKey(item) !== targetKey)
         },
         updateQuantity: (state, action) => {
-            const { menu_id, quantity } = action.payload
+            const { quantity } = action.payload
+            const itemKey = resolveCartItemKey(action.payload)
             if (quantity <= 0) {
-                state.items = state.items.filter(i => i.menu_id !== menu_id)
+                state.items = state.items.filter(i => resolveCartItemKey(i) !== itemKey)
                 return
             }
-            const item = state.items.find(i => i.menu_id === menu_id)
+            const item = state.items.find(i => resolveCartItemKey(i) === itemKey)
             if (item) {
                 item.quantity = quantity
             }
         },
         setItemNotes: (state, action) => {
-            const { menu_id, notes } = action.payload
-            const item = state.items.find(i => i.menu_id === menu_id)
+            const { notes } = action.payload
+            const itemKey = resolveCartItemKey(action.payload)
+            const item = state.items.find(i => resolveCartItemKey(i) === itemKey)
             if (item) {
                 item.notes = notes
             }

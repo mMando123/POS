@@ -56,6 +56,11 @@ const Employee = sequelize.define('Employee', {
         type: DataTypes.UUID,
         allowNull: true
     },
+    base_salary: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0
+    },
     employment_type: {
         type: DataTypes.ENUM('full_time', 'part_time', 'contract', 'temporary'),
         allowNull: false,
@@ -135,4 +140,3 @@ const Employee = sequelize.define('Employee', {
 })
 
 module.exports = Employee
-

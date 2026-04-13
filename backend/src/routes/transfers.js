@@ -14,6 +14,7 @@ const {
     Stock,
     Menu,
     Warehouse,
+    Branch,
     sequelize
 } = require('../models')
 const { Op } = require('sequelize')
@@ -58,6 +59,233 @@ router.get('/', authenticate, authorize('admin', 'manager'), async (req, res) =>
     } catch (error) {
         console.error('Get transfers error:', error)
         res.status(500).json({ message: 'خطأ في جلب التحويلات' })
+    }
+})
+
+/**
+ * GET /api/transfers/reports/summary
+ * Get summarized transfer report with date filters
+ */
+router.get('/reports/summary', authenticate, authorize('admin', 'manager'), async (req, res) => {
+    try {
+        const { warehouse_id, branch_id, status, start_date, end_date, limit = 500, offset = 0 } = req.query
+
+        const where = {}
+        const andConditions = []
+
+        if (warehouse_id) {
+            andConditions.push({
+                [Op.or]: [
+                    { from_warehouse_id: warehouse_id },
+                    { to_warehouse_id: warehouse_id }
+                ]
+            })
+        }
+
+        if (status) {
+            andConditions.push({ status })
+        }
+
+        if (branch_id) {
+            const branchWarehouses = await Warehouse.findAll({
+                where: { branch_id },
+                attributes: ['id']
+            })
+            const branchWarehouseIds = branchWarehouses.map((warehouse) => warehouse.id)
+
+            if (!branchWarehouseIds.length) {
+                return res.json({
+                    data: [],
+                    summary: {
+                        total_transfers: 0,
+                        completed_transfers: 0,
+                        pending_transfers: 0,
+                        cancelled_transfers: 0,
+                        total_items: 0,
+                        total_quantity: 0
+                    },
+                    by_route: [],
+                    pagination: { total: 0, limit: parseInt(limit, 10), offset: parseInt(offset, 10) }
+                })
+            }
+
+            andConditions.push({
+                [Op.or]: [
+                    { from_warehouse_id: { [Op.in]: branchWarehouseIds } },
+                    { to_warehouse_id: { [Op.in]: branchWarehouseIds } }
+                ]
+            })
+        }
+
+        if (start_date || end_date) {
+            const createdAt = {}
+            if (start_date) createdAt[Op.gte] = new Date(start_date)
+            if (end_date) createdAt[Op.lte] = new Date(end_date)
+            andConditions.push({ created_at: createdAt })
+        }
+
+        if (req.user?.role !== 'admin') {
+            const scopedWarehouses = await Warehouse.findAll({
+                where: { branch_id: req.user?.branchId || null },
+                attributes: ['id']
+            })
+            const scopedWarehouseIds = scopedWarehouses.map((warehouse) => warehouse.id)
+
+            if (!scopedWarehouseIds.length) {
+                return res.json({
+                    data: [],
+                    summary: {
+                        total_transfers: 0,
+                        completed_transfers: 0,
+                        pending_transfers: 0,
+                        cancelled_transfers: 0,
+                        total_items: 0,
+                        total_quantity: 0
+                    },
+                    by_route: [],
+                    pagination: { total: 0, limit: parseInt(limit, 10), offset: parseInt(offset, 10) }
+                })
+            }
+
+            andConditions.push({
+                [Op.or]: [
+                    { from_warehouse_id: { [Op.in]: scopedWarehouseIds } },
+                    { to_warehouse_id: { [Op.in]: scopedWarehouseIds } }
+                ]
+            })
+        }
+
+        if (andConditions.length === 1) {
+            Object.assign(where, andConditions[0])
+        } else if (andConditions.length > 1) {
+            where[Op.and] = andConditions
+        }
+
+        const { rows, count } = await StockTransfer.findAndCountAll({
+            where,
+            include: [
+                {
+                    model: Warehouse,
+                    as: 'fromWarehouse',
+                    attributes: ['id', 'name_ar', 'branch_id'],
+                    include: [{ model: Branch, attributes: ['id', 'name_ar', 'name_en'], required: false }]
+                },
+                {
+                    model: Warehouse,
+                    as: 'toWarehouse',
+                    attributes: ['id', 'name_ar', 'branch_id'],
+                    include: [{ model: Branch, attributes: ['id', 'name_ar', 'name_en'], required: false }]
+                },
+                {
+                    model: StockTransferItem,
+                    as: 'items',
+                    attributes: ['id', 'menu_id', 'quantity']
+                }
+            ],
+            order: [['created_at', 'DESC']],
+            limit: parseInt(limit, 10),
+            offset: parseInt(offset, 10)
+        })
+
+        const routeMap = new Map()
+        const data = rows.map((transfer) => {
+            const itemsCount = Array.isArray(transfer.items) ? transfer.items.length : 0
+            const totalQuantity = Array.isArray(transfer.items)
+                ? transfer.items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0)
+                : 0
+            const fromBranchName =
+                transfer.fromWarehouse?.Branch?.name_ar ||
+                transfer.fromWarehouse?.Branch?.name_en ||
+                'بدون فرع'
+            const toBranchName =
+                transfer.toWarehouse?.Branch?.name_ar ||
+                transfer.toWarehouse?.Branch?.name_en ||
+                'بدون فرع'
+
+            const routeKey = `${transfer.fromWarehouse?.branch_id || 'unassigned'}->${transfer.toWarehouse?.branch_id || 'unassigned'}`
+            if (!routeMap.has(routeKey)) {
+                routeMap.set(routeKey, {
+                    route_key: routeKey,
+                    from_branch_id: transfer.fromWarehouse?.branch_id || null,
+                    from_branch_name: fromBranchName,
+                    to_branch_id: transfer.toWarehouse?.branch_id || null,
+                    to_branch_name: toBranchName,
+                    transfers_count: 0,
+                    total_items: 0,
+                    total_quantity: 0,
+                    completed_transfers: 0,
+                    pending_transfers: 0,
+                    cancelled_transfers: 0
+                })
+            }
+
+            const routeSummary = routeMap.get(routeKey)
+            routeSummary.transfers_count += 1
+            routeSummary.total_items += itemsCount
+            routeSummary.total_quantity += totalQuantity
+            if (transfer.status === 'completed') routeSummary.completed_transfers += 1
+            if (transfer.status === 'pending') routeSummary.pending_transfers += 1
+            if (transfer.status === 'cancelled') routeSummary.cancelled_transfers += 1
+
+            return {
+                id: transfer.id,
+                transfer_number: transfer.transfer_number,
+                status: transfer.status,
+                notes: transfer.notes || '',
+                created_at: transfer.created_at,
+                completed_at: transfer.completed_at,
+                items_count: itemsCount,
+                total_quantity: Math.round(totalQuantity * 100) / 100,
+                from_warehouse_id: transfer.from_warehouse_id,
+                from_warehouse_name: transfer.fromWarehouse?.name_ar || '—',
+                from_branch_id: transfer.fromWarehouse?.branch_id || null,
+                from_branch_name: fromBranchName,
+                to_warehouse_id: transfer.to_warehouse_id,
+                to_warehouse_name: transfer.toWarehouse?.name_ar || '—',
+                to_branch_id: transfer.toWarehouse?.branch_id || null,
+                to_branch_name: toBranchName
+            }
+        })
+
+        const summary = data.reduce((acc, transfer) => {
+            acc.total_transfers += 1
+            acc.total_items += transfer.items_count
+            acc.total_quantity += transfer.total_quantity
+            if (transfer.status === 'completed') acc.completed_transfers += 1
+            if (transfer.status === 'pending') acc.pending_transfers += 1
+            if (transfer.status === 'cancelled') acc.cancelled_transfers += 1
+            return acc
+        }, {
+            total_transfers: 0,
+            completed_transfers: 0,
+            pending_transfers: 0,
+            cancelled_transfers: 0,
+            total_items: 0,
+            total_quantity: 0
+        })
+
+        summary.total_quantity = Math.round(summary.total_quantity * 100) / 100
+
+        const byRoute = Array.from(routeMap.values())
+            .map((row) => ({
+                ...row,
+                total_quantity: Math.round(row.total_quantity * 100) / 100
+            }))
+            .sort((a, b) => b.total_quantity - a.total_quantity)
+
+        res.json({
+            data,
+            summary,
+            by_route: byRoute,
+            pagination: {
+                total: count,
+                limit: parseInt(limit, 10),
+                offset: parseInt(offset, 10)
+            }
+        })
+    } catch (error) {
+        console.error('Get transfer summary error:', error)
+        res.status(500).json({ message: 'خطأ في جلب ملخص التحويلات' })
     }
 })
 

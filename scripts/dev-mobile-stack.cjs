@@ -6,11 +6,14 @@ const net = require('net');
 
 const rootDir = path.resolve(__dirname, '..');
 const isWin = process.platform === 'win32';
-const npmCmd = isWin ? 'npm.cmd' : 'npm';
-const npxCmd = isWin ? 'npx.cmd' : 'npx';
+const nodeCmd = process.execPath;
 
 const children = [];
 let shuttingDown = false;
+const QUICK_REUSE_CHECK_ATTEMPTS = 5;
+const QUICK_REUSE_CHECK_DELAY_MS = 1000;
+const STARTUP_CHECK_ATTEMPTS = 90;
+const STARTUP_CHECK_DELAY_MS = 1000;
 
 function safeWrite(stream, message) {
   if (!stream || stream.destroyed || !stream.writable) return;
@@ -21,20 +24,16 @@ function safeWrite(stream, message) {
   }
 }
 
-function run(cmd, args, cwd, name) {
-  const spawnCmd = isWin ? 'cmd.exe' : cmd;
-  const spawnArgs = isWin
-    ? ['/d', '/s', '/c', [cmd, ...args].map((part) => {
-      if (/[ "]/.test(part)) return `"${part.replace(/"/g, '\\"')}"`;
-      return part;
-    }).join(' ')]
-    : args;
-
-  const child = spawn(spawnCmd, spawnArgs, {
+function run(cmd, args, cwd, name, extraEnv = {}) {
+  const child = spawn(cmd, args, {
     cwd,
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: process.env,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      ...extraEnv,
+    },
   });
 
   child.stdout.on('data', (buf) => {
@@ -51,12 +50,15 @@ function run(cmd, args, cwd, name) {
   child.on('exit', (code, signal) => {
     if (shuttingDown) return;
     console.error(`[${name}] exited (code=${code}, signal=${signal})`);
-    if (name === 'ngrok' && code !== 0) {
-      console.error('[runner] ngrok failed. If you see ERR_NGROK_108, close old ngrok session then retry.');
-    }
     if (name === 'backend' || name === 'pos') {
       shutdown(1);
     }
+  });
+
+  child.on('error', (err) => {
+    if (shuttingDown) return;
+    console.error(`[${name}] failed to start:`, err.message);
+    shutdown(1);
   });
 
   children.push({ name, child });
@@ -166,51 +168,19 @@ function killProcessesOnPort(port) {
   }
 }
 
-function getNgrokUrl() {
-  return new Promise((resolve) => {
-    const req = http.get('http://127.0.0.1:4040/api/tunnels', (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          const tunnel = (parsed.tunnels || []).find((t) => t.public_url && t.public_url.startsWith('https://'));
-          resolve(tunnel ? tunnel.public_url : null);
-        } catch (_) {
-          resolve(null);
-        }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.setTimeout(2000, () => {
-      req.destroy();
-      resolve(null);
-    });
-  });
-}
-
-async function printNgrokUrl(maxAttempts = 30) {
-  for (let i = 0; i < maxAttempts; i += 1) {
-    const url = await getNgrokUrl();
-    if (url) {
-      console.log(`\n[runner] Mobile HTTPS URL: ${url}`);
-      console.log('[runner] Open this URL from mobile browser, then install app.');
-      return;
-    }
-    await wait(1000);
-  }
-  console.warn('[runner] ngrok started but HTTPS URL was not detected on :4040.');
-}
-
 async function main() {
-  console.log('[runner] starting backend + POS (PWA dev) + website + KDS + ngrok tunnel...');
+  console.log('[runner] starting backend + POS (PWA dev) + website + KDS...');
 
   const backendCwd = path.join(rootDir, 'backend');
   const posCwd = path.join(rootDir, 'pos');
   const websiteCwd = path.join(rootDir, 'website');
   const kdsCwd = path.join(rootDir, 'kds');
+  const backendDevArgs = [path.join(backendCwd, 'node_modules', 'nodemon', 'bin', 'nodemon.js'), 'src/server.js'];
+  const websiteDevArgs = [path.join(websiteCwd, 'node_modules', 'vite', 'bin', 'vite.js')];
+  const kdsDevArgs = [path.join(kdsCwd, 'node_modules', 'vite', 'bin', 'vite.js')];
+  const posDevArgs = [path.join(posCwd, 'node_modules', 'vite', 'bin', 'vite.js'), '--mode', 'pwa-dev'];
+
+  const backendHealthUrl = 'http://127.0.0.1:3001/api/health';
 
   const [backendPortBusy, posPortBusy, websitePortBusy, kdsPortBusy] = await Promise.all([
     isPortInUse(3001),
@@ -222,17 +192,22 @@ async function main() {
   if (backendPortBusy) {
     console.log('[runner] Port 3001 is already in use. Reusing existing backend process.');
   } else {
-    run(npmCmd, ['run', 'dev'], backendCwd, 'backend');
+    run(nodeCmd, backendDevArgs, backendCwd, 'backend', { NODE_ENV: 'development' });
   }
 
-  let backendReady = await waitForHttpOk('http://127.0.0.1:3001/api/settings/public');
+  let backendReady = await waitForHttpOk(
+    backendHealthUrl,
+    backendPortBusy ? QUICK_REUSE_CHECK_ATTEMPTS : STARTUP_CHECK_ATTEMPTS,
+    backendPortBusy ? QUICK_REUSE_CHECK_DELAY_MS : STARTUP_CHECK_DELAY_MS
+  );
+
   if (!backendReady && backendPortBusy) {
-    console.warn('[runner] Port 3001 is occupied but backend API is not reachable. Attempting auto-recovery...');
+    console.warn('[runner] Port 3001 is occupied but backend API is not reachable. Killing stale backend and restarting...');
     const killed = killProcessesOnPort(3001);
     if (killed) {
       await wait(800);
-      run(npmCmd, ['run', 'dev'], backendCwd, 'backend');
-      backendReady = await waitForHttpOk('http://127.0.0.1:3001/api/settings/public');
+      run(nodeCmd, backendDevArgs, backendCwd, 'backend', { NODE_ENV: 'development' });
+      backendReady = await waitForHttpOk(backendHealthUrl, STARTUP_CHECK_ATTEMPTS, STARTUP_CHECK_DELAY_MS);
     }
   }
 
@@ -249,7 +224,7 @@ async function main() {
       process.exit(1);
     }
   } else {
-    run(npmCmd, ['run', 'dev'], websiteCwd, 'website');
+    run(nodeCmd, websiteDevArgs, websiteCwd, 'website');
   }
 
   if (kdsPortBusy) {
@@ -260,7 +235,7 @@ async function main() {
       process.exit(1);
     }
   } else {
-    run(npmCmd, ['run', 'dev'], kdsCwd, 'kds');
+    run(nodeCmd, kdsDevArgs, kdsCwd, 'kds');
   }
 
   if (posPortBusy) {
@@ -271,21 +246,12 @@ async function main() {
       process.exit(1);
     }
   } else {
-    run(npmCmd, ['run', 'dev:pwa'], posCwd, 'pos');
+    run(nodeCmd, posDevArgs, posCwd, 'pos');
     await wait(1800);
   }
 
-  const existingNgrokUrl = await getNgrokUrl();
-  if (existingNgrokUrl) {
-    console.log(`\n[runner] Existing ngrok tunnel detected: ${existingNgrokUrl}`);
-    console.log('[runner] Reusing existing tunnel.');
-  } else {
-    run(npxCmd, ['ngrok', 'http', '3002'], posCwd, 'ngrok');
-  }
-
-  printNgrokUrl().catch(() => {
-    console.warn('[runner] failed to read ngrok URL from local API.');
-  });
+  console.log('\n[runner] All local servers are running!');
+  console.log('[runner] To test on mobile securely (HTTPS), please run `npm run tunnel:website` or `npm run tunnel:pos` in a new terminal window.');
 }
 
 process.on('SIGINT', () => shutdown(0));

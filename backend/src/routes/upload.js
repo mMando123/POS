@@ -72,7 +72,7 @@ router.delete('/image/:filename', authenticate, authorize('admin', 'manager'), (
     try {
         const { filename } = req.params
         if (!/^[a-f0-9-]{36}\.(jpe?g|png|gif|webp)$/i.test(filename)) {
-            return res.status(400).json({ message: 'Ø§Ø³Ù… Ø§Ù„Ù…Ù„Ù ØºÙŠØ± ØµØ§Ù„Ø­' })
+            return res.status(400).json({ message: 'اسم الملف غير صالح' })
         }
         const filePath = path.join(uploadsDir, filename)
 

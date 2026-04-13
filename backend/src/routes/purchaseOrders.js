@@ -27,6 +27,39 @@ const AccountingHooks = require('../services/accountingHooks')
 const { loadSettings } = require('./settings')
 const { Op } = require('sequelize')
 
+const normalizeDateOnlyInput = (value) => {
+    if (value === undefined || value === null || value === '') return null
+    const raw = String(value).trim()
+    const normalized = raw.includes('T') ? raw.slice(0, 10) : raw
+    const parsed = new Date(`${normalized}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+        const error = new Error('تاريخ الإنتاج أو الانتهاء غير صالح')
+        error.statusCode = 400
+        throw error
+    }
+    return normalized
+}
+
+const sanitizeInventoryDateFields = (item = {}) => {
+    const batchNumber = item.batch_number === undefined || item.batch_number === null || item.batch_number === ''
+        ? null
+        : String(item.batch_number).trim()
+    const productionDate = normalizeDateOnlyInput(item.production_date)
+    const expiryDate = normalizeDateOnlyInput(item.expiry_date)
+
+    if (productionDate && expiryDate && expiryDate < productionDate) {
+        const error = new Error('تاريخ الانتهاء يجب أن يكون بعد أو مساويًا لتاريخ الإنتاج')
+        error.statusCode = 400
+        throw error
+    }
+
+    return {
+        batch_number: batchNumber,
+        production_date: productionDate,
+        expiry_date: expiryDate
+    }
+}
+
 const buildPurchaseOrderTotals = (items = [], defaultTaxRate = 0) => {
     let subtotal = 0
     let totalTax = 0
@@ -548,6 +581,9 @@ router.post('/:id/confirm',
  *                       type: number
  *                     batch_number:
  *                       type: string
+ *                     production_date:
+ *                       type: string
+ *                       format: date
  *                     expiry_date:
  *                       type: string
  *                       format: date
@@ -579,7 +615,12 @@ router.post('/:id/receive',
                 await transaction.rollback()
                 return res.status(400).json({ message: 'يجب تأكيد أمر الشراء أولاً' })
             }
-            const receivedItems = Array.isArray(req.body.items) ? req.body.items : []
+            const receivedItems = Array.isArray(req.body.items)
+                ? req.body.items.map((item) => ({
+                    ...item,
+                    ...sanitizeInventoryDateFields(item)
+                }))
+                : []
             let allReceived = true
             let anyReceived = false
             let receiptSubtotal = 0
@@ -610,6 +651,7 @@ router.post('/:id/receive',
                         quantity_received: newReceivedQty,
                         remaining_quantity: Math.max(0, orderedQty - newReceivedQty),
                         batch_number: received?.batch_number || item.batch_number,
+                        production_date: received?.production_date || item.production_date,
                         expiry_date: received?.expiry_date || item.expiry_date
                     }, { transaction })
 
@@ -624,6 +666,7 @@ router.post('/:id/receive',
                         unit_cost: item.unit_cost,
                         total_cost: itemSubtotal,
                         batch_number: received?.batch_number,
+                        production_date: received?.production_date,
                         expiry_date: received?.expiry_date
                     })
 
@@ -638,6 +681,7 @@ router.post('/:id/receive',
                     }, {
                         transaction,
                         batchNumber: received?.batch_number,
+                        productionDate: received?.production_date,
                         expiryDate: received?.expiry_date,
                         notes: `Receive from PO ${po.po_number}`
                     })
@@ -721,6 +765,9 @@ router.post('/:id/receive',
         } catch (error) {
             await transaction.rollback()
             console.error('Receive PO error:', error)
+            if (error.statusCode === 400) {
+                return res.status(400).json({ message: error.message })
+            }
             res.status(500).json({ message: error.message || 'خطأ في استلام أمر الشراء' })
         }
     }

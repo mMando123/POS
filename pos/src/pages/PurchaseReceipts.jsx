@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
     Box,
     Typography,
@@ -29,7 +29,8 @@ import {
     LinearProgress,
     Stepper,
     Step,
-    StepLabel
+    StepLabel,
+    Stack
 } from '@mui/material'
 import {
     Add as AddIcon,
@@ -41,10 +42,17 @@ import {
     PersonAdd as PersonAddIcon,
     AddBox as AddBoxIcon,
     Inventory as InventoryIcon,
-    LocalShipping as ShippingIcon
+    LocalShipping as ShippingIcon,
+    WhatsApp as WhatsAppIcon,
+    QrCodeScanner as ScannerIcon,
+    PhotoCamera as CameraIcon,
+    UploadFile as UploadIcon,
+    StopCircle as StopIcon
 } from '@mui/icons-material'
 import { purchaseAPI, warehouseAPI, inventoryAPI, supplierAPI, categoryAPI, expenseAPI } from '../services/api'
 import EntityAttachmentsPanel from '../components/EntityAttachmentsPanel'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 const PAYMENT_METHODS = [
     { value: 'credit', label: 'آجل (حساب المورد)' },
@@ -91,6 +99,17 @@ const QUICK_UOM_ALIASES = {
     gram: 'g',
     grams: 'g'
 }
+const BARCODE_DETECTOR_FORMATS = [
+    'ean_13',
+    'ean_8',
+    'upc_a',
+    'upc_e',
+    'code_128',
+    'code_39',
+    'codabar',
+    'itf',
+    'qr_code'
+]
 
 const normalizeUomInput = (value, fallback = 'piece') => {
     const raw = String(value || '').trim()
@@ -98,6 +117,36 @@ const normalizeUomInput = (value, fallback = 'piece') => {
     const normalized = QUICK_UOM_ALIASES[raw.toLowerCase()] || raw.toLowerCase()
     if (QUICK_UOM_OPTIONS.includes(normalized)) return normalized
     return raw
+}
+
+const buildScanLookupKeys = (value, { allowUpcEanFallback = true } = {}) => {
+    const raw = String(value || '').trim()
+    if (!raw) return []
+
+    const rawLower = raw.toLowerCase()
+    const compact = rawLower.replace(/[\s\-_]+/g, '')
+    const digitsOnly = compact.replace(/\D+/g, '')
+    const keys = new Set([rawLower])
+
+    if (compact) keys.add(compact)
+    if (digitsOnly) keys.add(digitsOnly)
+
+    // Barcode readers sometimes return EAN-13 while the system stores UPC-A,
+    // or the reverse, by only adding/removing a leading zero.
+    if (allowUpcEanFallback && digitsOnly) {
+        if (digitsOnly.length === 12) keys.add(`0${digitsOnly}`)
+        if (digitsOnly.length === 13 && digitsOnly.startsWith('0')) keys.add(digitsOnly.slice(1))
+    }
+
+    return [...keys].filter(Boolean)
+}
+
+const formatCodePreview = (codes, limit = 3) => {
+    const cleaned = [...new Set((codes || []).map((code) => String(code || '').trim()).filter(Boolean))]
+    if (!cleaned.length) return ''
+
+    const preview = cleaned.slice(0, limit).join('، ')
+    return cleaned.length > limit ? `${preview} ...` : preview
 }
 
 export default function PurchaseReceipts() {
@@ -113,12 +162,22 @@ export default function PurchaseReceipts() {
     const [categories, setCategories] = useState([])
     const [error, setError] = useState('')
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
+    const [whatsappDialog, setWhatsappDialog] = useState({ open: false, receipt: null, pdfBlob: null, generating: false })
+    const [whatsappPhone, setWhatsappPhone] = useState('')
     const [searchFilter, setSearchFilter] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [supplierFilter, setSupplierFilter] = useState('')
     const [warehouseFilter, setWarehouseFilter] = useState('')
     const [fromDateFilter, setFromDateFilter] = useState('')
     const [toDateFilter, setToDateFilter] = useState('')
+    const [bulkScanInput, setBulkScanInput] = useState('')
+    const [bulkScanQuantity, setBulkScanQuantity] = useState(1)
+    const [bulkScanFeedback, setBulkScanFeedback] = useState({ severity: 'info', message: '', misses: [] })
+    const [scanDialogOpen, setScanDialogOpen] = useState(false)
+    const [scanStatus, setScanStatus] = useState({ severity: 'info', message: 'افتح الكاميرا أو ارفع صورة تحتوي على باركود لقراءته تلقائيًا.' })
+    const [cameraRunning, setCameraRunning] = useState(false)
+    const [scannerProcessing, setScannerProcessing] = useState(false)
+    const [lastDetectedCode, setLastDetectedCode] = useState('')
 
     // ============ Goods Receipt Dialog ============
     const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
@@ -143,14 +202,27 @@ export default function PurchaseReceipts() {
     const [prodErrors, setProdErrors] = useState({})
     // Track which product row triggered the quick-add so we can auto-fill it
     const pendingProductRowRef = useRef(null)
+    const cameraVideoRef = useRef(null)
+    const fileScanInputRef = useRef(null)
+    const cameraStreamRef = useRef(null)
+    const scanLoopRef = useRef(null)
+    const scanInFlightRef = useRef(false)
+    const lastScanRef = useRef({ code: '', at: 0 })
 
     // Form
     const [paymentAccounts, setPaymentAccounts] = useState([])
     const [loadingPaymentAccounts, setLoadingPaymentAccounts] = useState(false)
 
-    const { control, register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
+    const { control, register, handleSubmit, reset, watch, setValue, getValues, formState: { errors } } = useForm({
         defaultValues: {
-            items: [{ menu_id: '', quantity: 1, unit_cost: 0 }],
+            items: [{
+                menu_id: '',
+                quantity: 1,
+                unit_cost: 0,
+                batch_number: '',
+                production_date: '',
+                expiry_date: ''
+            }],
             payment_method: 'credit',
             payment_account_code: ''
         }
@@ -335,12 +407,40 @@ export default function PurchaseReceipts() {
         setError('')
 
         try {
+            const normalizedItems = (data.items || []).filter((item) => Boolean(item?.menu_id?.id || item?.menu_id))
+
+            if (!normalizedItems.length) {
+                setSnackbar({
+                    open: true,
+                    message: 'أضف صنفًا واحدًا على الأقل قبل حفظ الفاتورة',
+                    severity: 'error'
+                })
+                return
+            }
+
+            const invalidShelfLifeItem = normalizedItems.find((item) =>
+                item.production_date && item.expiry_date && item.expiry_date < item.production_date
+            )
+
+            if (invalidShelfLifeItem) {
+                const productName = invalidShelfLifeItem.menu_id?.name_ar || 'الصنف المحدد'
+                setSnackbar({
+                    open: true,
+                    message: `تاريخ الانتهاء يجب أن يكون بعد تاريخ الإنتاج للصنف ${productName}`,
+                    severity: 'error'
+                })
+                return
+            }
+
             const payload = {
                 ...data,
-                items: data.items.map(item => ({
-                    menu_id: item.menu_id.id,
+                items: normalizedItems.map(item => ({
+                    menu_id: item.menu_id?.id || item.menu_id,
                     quantity: parseFloat(item.quantity),
-                    unit_cost: parseFloat(item.unit_cost)
+                    unit_cost: parseFloat(item.unit_cost),
+                    batch_number: item.batch_number || null,
+                    production_date: item.production_date || null,
+                    expiry_date: item.expiry_date || null
                 }))
             }
 
@@ -411,6 +511,7 @@ export default function PurchaseReceipts() {
                 : 0,
             unit_cost: parseFloat(item.unit_cost || 0),
             batch_number: item.batch_number || '',
+            production_date: item.production_date || '',
             expiry_date: item.expiry_date || ''
         }))
 
@@ -425,11 +526,27 @@ export default function PurchaseReceipts() {
             .filter(item => item.quantity_to_receive > 0)
             .map(item => ({
                 id: item.id,
-                quantity_received: item.quantity_to_receive
+                quantity_received: item.quantity_to_receive,
+                batch_number: item.batch_number || null,
+                production_date: item.production_date || null,
+                expiry_date: item.expiry_date || null
             }))
 
         if (itemsToReceive.length === 0) {
             setSnackbar({ open: true, message: 'لم يتم تحديد كميات للاستلام', severity: 'warning' })
+            return
+        }
+
+        const invalidShelfLifeItem = itemsToReceive.find((item) =>
+            item.production_date && item.expiry_date && item.expiry_date < item.production_date
+        )
+        if (invalidShelfLifeItem) {
+            const invalidProduct = receiveItems.find((item) => item.id === invalidShelfLifeItem.id)
+            setSnackbar({
+                open: true,
+                message: `تاريخ الانتهاء يجب أن يكون بعد تاريخ الإنتاج للصنف ${invalidProduct?.productName || ''}`.trim(),
+                severity: 'error'
+            })
             return
         }
 
@@ -494,6 +611,8 @@ export default function PurchaseReceipts() {
             return sum + (parseFloat(item.quantity || 0) * parseFloat(item.unit_cost || 0))
         }, 0)
     }
+    const totalLineItems = items.filter((item) => Boolean(item?.menu_id?.id || item?.menu_id)).length
+    const totalItemQuantity = items.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0)
 
     // Build supplier options with "Add New" always at the end
     const supplierOptions = [...suppliers, ADD_NEW_SUPPLIER]
@@ -503,6 +622,426 @@ export default function PurchaseReceipts() {
     // Find selected supplier object for the controlled Autocomplete
     const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId) || null
 
+    const productLookup = useMemo(() => {
+        const barcodeMap = new Map()
+        const skuMap = new Map()
+        const exactMap = new Map()
+
+        for (const product of products) {
+            const nameAr = String(product?.name_ar || '').trim().toLowerCase()
+            const nameEn = String(product?.name_en || '').trim().toLowerCase()
+
+            buildScanLookupKeys(product?.barcode).forEach((key) => {
+                if (!barcodeMap.has(key)) barcodeMap.set(key, product)
+            })
+
+            buildScanLookupKeys(product?.sku, { allowUpcEanFallback: false }).forEach((key) => {
+                if (!skuMap.has(key)) skuMap.set(key, product)
+            })
+
+            if (nameAr) exactMap.set(nameAr, product)
+            if (nameEn) exactMap.set(nameEn, product)
+        }
+
+        return { barcodeMap, skuMap, exactMap }
+    }, [products])
+
+    const resolveProductFromScanToken = useCallback((rawToken) => {
+        const token = String(rawToken || '').trim()
+        if (!token) return null
+
+        const normalized = token.toLowerCase()
+        for (const key of buildScanLookupKeys(token)) {
+            const exactBarcode = productLookup.barcodeMap.get(key)
+            if (exactBarcode) return exactBarcode
+        }
+
+        for (const key of buildScanLookupKeys(token, { allowUpcEanFallback: false })) {
+            const exactSku = productLookup.skuMap.get(key)
+            if (exactSku) return exactSku
+        }
+
+        const exactName = productLookup.exactMap.get(normalized)
+        if (exactName) return exactName
+
+        const partialMatches = products.filter((product) => {
+            const haystack = [
+                product?.name_ar,
+                product?.name_en,
+                product?.sku,
+                product?.barcode
+            ].filter(Boolean).join(' ').toLowerCase()
+
+            return haystack.includes(normalized)
+        })
+
+        return partialMatches.length === 1 ? partialMatches[0] : null
+    }, [productLookup, products])
+
+    const addProductToInvoice = useCallback((product, requestedQuantity = 1) => {
+        const quantityToAdd = Math.max(0.01, parseFloat(requestedQuantity) || 1)
+        const currentItems = getValues('items') || []
+        const existingIndex = currentItems.findIndex((item) => {
+            const lineProductId = item?.menu_id?.id || item?.menu_id || ''
+            return lineProductId === product.id
+        })
+
+        if (existingIndex >= 0) {
+            const currentQty = parseFloat(currentItems[existingIndex]?.quantity || 0) || 0
+            setValue(`items.${existingIndex}.quantity`, currentQty + quantityToAdd, {
+                shouldDirty: true,
+                shouldValidate: true
+            })
+            if (!(parseFloat(currentItems[existingIndex]?.unit_cost || 0) > 0) && parseFloat(product.cost_price || 0) > 0) {
+                setValue(`items.${existingIndex}.unit_cost`, parseFloat(product.cost_price), {
+                    shouldDirty: true,
+                    shouldValidate: true
+                })
+            }
+            return 'incremented'
+        }
+
+        const blankIndex = currentItems.findIndex((item) => !(item?.menu_id?.id || item?.menu_id))
+        if (blankIndex >= 0) {
+            setValue(`items.${blankIndex}.menu_id`, product, { shouldDirty: true, shouldValidate: true })
+            setValue(`items.${blankIndex}.quantity`, quantityToAdd, { shouldDirty: true, shouldValidate: true })
+            setValue(`items.${blankIndex}.unit_cost`, parseFloat(product.cost_price || 0), {
+                shouldDirty: true,
+                shouldValidate: true
+            })
+            return 'added'
+        }
+
+        append({
+            menu_id: product,
+            quantity: quantityToAdd,
+            unit_cost: parseFloat(product.cost_price || 0),
+            batch_number: '',
+            production_date: '',
+            expiry_date: ''
+        })
+        return 'added'
+    }, [append, getValues, setValue])
+
+    const parseBulkScanEntries = useCallback((rawValue, defaultQuantity) => {
+        const normalizedValue = String(rawValue || '').trim()
+        if (!normalizedValue) return []
+
+        const hasBatchSeparators = /[\n,،;]/.test(normalizedValue)
+        const rawEntries = hasBatchSeparators
+            ? normalizedValue.split(/[\n,،;]+/)
+            : [normalizedValue]
+
+        return rawEntries
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .map((entry) => {
+                const qtyMatch = entry.match(/^(.*?)(?:\s*[*xX]\s*(\d+(?:\.\d+)?))$/)
+                if (qtyMatch) {
+                    return {
+                        token: qtyMatch[1].trim(),
+                        quantity: Math.max(0.01, parseFloat(qtyMatch[2]) || 1)
+                    }
+                }
+
+                return {
+                    token: entry,
+                    quantity: hasBatchSeparators ? 1 : Math.max(0.01, parseFloat(defaultQuantity) || 1)
+                }
+            })
+    }, [])
+
+    const handleBulkScanSubmit = useCallback(() => {
+        const entries = parseBulkScanEntries(bulkScanInput, bulkScanQuantity)
+        if (!entries.length) return
+
+        let addedCount = 0
+        let incrementedCount = 0
+        const misses = []
+
+        for (const entry of entries) {
+            const product = resolveProductFromScanToken(entry.token)
+            if (!product) {
+                misses.push(entry.token)
+                continue
+            }
+
+            const result = addProductToInvoice(product, entry.quantity)
+            if (result === 'incremented') incrementedCount += 1
+            else addedCount += 1
+        }
+
+        const messageParts = []
+        if (addedCount) messageParts.push(`تمت إضافة ${addedCount} صنف`)
+        if (incrementedCount) messageParts.push(`تمت زيادة ${incrementedCount} سطر`)
+        if (misses.length) {
+            const missPreview = formatCodePreview(misses)
+            messageParts.push(`تعذر العثور على ${misses.length} كود${missPreview ? `: ${missPreview}` : ''}`)
+        }
+
+        const severity = misses.length ? (addedCount || incrementedCount ? 'warning' : 'error') : 'success'
+        const message = messageParts.join(' - ') || 'لم يتم تنفيذ أي إضافة'
+
+        setBulkScanFeedback({ severity, message, misses })
+        setSnackbar({ open: true, message, severity })
+        setBulkScanInput('')
+        if (!/[\n,،;]/.test(String(bulkScanInput || '').trim())) {
+            setBulkScanQuantity(1)
+        }
+    }, [addProductToInvoice, bulkScanInput, bulkScanQuantity, parseBulkScanEntries, resolveProductFromScanToken])
+
+    const createBarcodeDetector = useCallback(() => {
+        if (typeof window === 'undefined' || !window.BarcodeDetector) return null
+        try {
+            return new window.BarcodeDetector({ formats: BARCODE_DETECTOR_FORMATS })
+        } catch {
+            try {
+                return new window.BarcodeDetector()
+            } catch {
+                return null
+            }
+        }
+    }, [])
+
+    const stopCameraScan = useCallback(() => {
+        if (scanLoopRef.current) {
+            cancelAnimationFrame(scanLoopRef.current)
+            scanLoopRef.current = null
+        }
+
+        const stream = cameraStreamRef.current
+        if (stream) {
+            stream.getTracks().forEach((track) => track.stop())
+            cameraStreamRef.current = null
+        }
+
+        if (cameraVideoRef.current) {
+            cameraVideoRef.current.srcObject = null
+        }
+
+        scanInFlightRef.current = false
+        setCameraRunning(false)
+    }, [])
+
+    const applyDetectedCodes = useCallback((codes, source = 'camera') => {
+        const normalizedCodes = [...new Set(
+            (codes || [])
+                .map((code) => String(code || '').trim())
+                .filter(Boolean)
+        )]
+        if (!normalizedCodes.length) return false
+
+        const now = Date.now()
+        if (
+            normalizedCodes.length === 1 &&
+            lastScanRef.current.code === normalizedCodes[0] &&
+            (now - lastScanRef.current.at) < 1500
+        ) {
+            return false
+        }
+
+        lastScanRef.current = { code: normalizedCodes[0], at: now }
+        const quantityPerCode = normalizedCodes.length > 1 ? 1 : Math.max(0.01, parseFloat(bulkScanQuantity) || 1)
+        let addedCount = 0
+        let incrementedCount = 0
+        const misses = []
+
+        for (const code of normalizedCodes) {
+            const product = resolveProductFromScanToken(code)
+            if (!product) {
+                misses.push(code)
+                continue
+            }
+
+            const result = addProductToInvoice(product, quantityPerCode)
+            if (result === 'incremented') incrementedCount += 1
+            else addedCount += 1
+        }
+
+        const messageParts = []
+        if (addedCount) messageParts.push(`تمت إضافة ${addedCount} صنف`)
+        if (incrementedCount) messageParts.push(`تمت زيادة ${incrementedCount} سطر`)
+        const missPreview = formatCodePreview(misses)
+        if (misses.length) messageParts.push(`تعذر العثور على ${misses.length} كود${missPreview ? `: ${missPreview}` : ''}`)
+        const severity = misses.length ? (addedCount || incrementedCount ? 'warning' : 'error') : 'success'
+        const message = messageParts.join(' - ') || 'لم يتم تنفيذ أي إضافة'
+
+        setLastDetectedCode(normalizedCodes.join('، '))
+        setBulkScanFeedback({ severity, message, misses })
+        setSnackbar({ open: true, message, severity })
+        setScanStatus({
+            severity,
+            message: misses.length
+                ? `${message}. تم المسح عبر ${source === 'image' ? 'الصورة' : 'الكاميرا'}${missPreview ? `، والكود المقروء: ${missPreview}` : ''}.`
+                : `تمت قراءة ${normalizedCodes.length} كود من ${source === 'image' ? 'الصورة' : 'الكاميرا'} وإضافته مباشرة.`
+        })
+        return true
+    }, [addProductToInvoice, bulkScanQuantity, resolveProductFromScanToken])
+
+    const startCameraScan = useCallback(async () => {
+        const detector = createBarcodeDetector()
+        if (!detector) {
+            setScanStatus({
+                severity: 'warning',
+                message: 'المتصفح الحالي لا يدعم قراءة الباركود بالكاميرا أو من الصورة. استخدم متصفح أحدث مثل Chrome على الهاتف.'
+            })
+            return
+        }
+
+        if (!window.isSecureContext) {
+            setScanStatus({
+                severity: 'warning',
+                message: 'تشغيل الكاميرا يحتاج فتح الصفحة عبر HTTPS أو localhost. على الهاتف استخدم رابط tunnel أو ngrok ثم أعد المحاولة.'
+            })
+            return
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setScanStatus({
+                severity: 'error',
+                message: 'هذا الجهاز أو المتصفح لا يوفّر الوصول إلى الكاميرا.'
+            })
+            return
+        }
+
+        stopCameraScan()
+        setScannerProcessing(true)
+        setLastDetectedCode('')
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            })
+
+            cameraStreamRef.current = stream
+            if (cameraVideoRef.current) {
+                cameraVideoRef.current.srcObject = stream
+                await cameraVideoRef.current.play().catch(() => {})
+            }
+
+            setCameraRunning(true)
+            setScanStatus({
+                severity: 'info',
+                message: 'وجّه الكاميرا نحو الباركود، وسيتم إدخاله تلقائيًا عند التعرف عليه.'
+            })
+
+            const scanFrame = async () => {
+                const video = cameraVideoRef.current
+                if (!cameraStreamRef.current || !video) return
+
+                if (video.readyState < 2 || scanInFlightRef.current) {
+                    scanLoopRef.current = requestAnimationFrame(scanFrame)
+                    return
+                }
+
+                scanInFlightRef.current = true
+                try {
+                    const detected = await detector.detect(video)
+                    if (detected?.length) {
+                        applyDetectedCodes(detected.map((item) => item.rawValue), 'camera')
+                    }
+                } catch {
+                    // Ignore transient detector errors and continue scanning
+                } finally {
+                    scanInFlightRef.current = false
+                    if (cameraStreamRef.current) {
+                        scanLoopRef.current = requestAnimationFrame(scanFrame)
+                    }
+                }
+            }
+
+            scanLoopRef.current = requestAnimationFrame(scanFrame)
+        } catch (err) {
+            setScanStatus({
+                severity: 'error',
+                message: err?.name === 'NotAllowedError'
+                    ? 'تم رفض صلاحية الكاميرا. اسمح للمتصفح بالوصول إلى الكاميرا ثم أعد المحاولة.'
+                    : 'تعذر تشغيل الكاميرا الآن.'
+            })
+        } finally {
+            setScannerProcessing(false)
+        }
+    }, [applyDetectedCodes, createBarcodeDetector, stopCameraScan])
+
+    const handleImageScan = useCallback(async (event) => {
+        const file = event.target.files?.[0]
+        event.target.value = ''
+        if (!file) return
+
+        const detector = createBarcodeDetector()
+        if (!detector) {
+            setScanStatus({
+                severity: 'warning',
+                message: 'المتصفح الحالي لا يدعم قراءة الباركود من الصور. استخدم متصفح أحدث أو الإدخال اليدوي.'
+            })
+            return
+        }
+
+        setScannerProcessing(true)
+        setLastDetectedCode('')
+
+        let objectUrl = null
+        let imageSource = null
+        try {
+            if (window.createImageBitmap) {
+                imageSource = await window.createImageBitmap(file)
+            } else {
+                objectUrl = URL.createObjectURL(file)
+                imageSource = await new Promise((resolve, reject) => {
+                    const image = new Image()
+                    image.onload = () => resolve(image)
+                    image.onerror = reject
+                    image.src = objectUrl
+                })
+            }
+
+            const detected = await detector.detect(imageSource)
+            if (!detected?.length) {
+                setScanStatus({
+                    severity: 'warning',
+                    message: 'لم يتم العثور على باركود واضح داخل الصورة. جرّب صورة أوضح أو بإضاءة أفضل.'
+                })
+                return
+            }
+
+            applyDetectedCodes(detected.map((item) => item.rawValue), 'image')
+        } catch {
+            setScanStatus({
+                severity: 'error',
+                message: 'تعذر تحليل الصورة الحالية. جرّب صورة أوضح أو باركود أقرب.'
+            })
+        } finally {
+            if (imageSource?.close) imageSource.close()
+            if (objectUrl) URL.revokeObjectURL(objectUrl)
+            setScannerProcessing(false)
+        }
+    }, [applyDetectedCodes, createBarcodeDetector])
+
+    const openScanDialog = useCallback(() => {
+        setScanDialogOpen(true)
+        setLastDetectedCode('')
+        setScanStatus({
+            severity: 'info',
+            message: 'اختر المسح بالكاميرا أو ارفع صورة باركود، وسيتم إدخال الكود مباشرة في الفاتورة.'
+        })
+    }, [])
+
+    const closeScanDialog = useCallback(() => {
+        setScanDialogOpen(false)
+        stopCameraScan()
+    }, [stopCameraScan])
+
+    useEffect(() => {
+        if (!scanDialogOpen) {
+            stopCameraScan()
+        }
+    }, [scanDialogOpen, stopCameraScan])
+
+    useEffect(() => () => {
+        stopCameraScan()
+    }, [stopCameraScan])
+
     const getStatusInfo = (status) => {
         switch (status) {
             case 'draft': return { label: 'بانتظار الاستلام', color: 'warning', step: 0 }
@@ -510,6 +1049,145 @@ export default function PurchaseReceipts() {
             case 'received': return { label: 'مستلم', color: 'success', step: 2 }
             case 'cancelled': return { label: 'ملغي', color: 'error', step: -1 }
             default: return { label: status, color: 'default', step: 0 }
+        }
+    }
+
+    // ==================== WHATSAPP PDF SHARING ====================
+        const openWhatsAppDialog = async (receipt) => {
+        const rawPhone = receipt.Supplier?.phone || ''
+        setWhatsappPhone(rawPhone)
+        setWhatsappDialog({ open: true, receipt, pdfBlob: null, generating: true })
+        try {
+            const doc = await generateInvoicePDF(receipt)
+            const pdfBlob = doc.output('blob')
+            setWhatsappDialog(prev => ({ ...prev, pdfBlob, generating: false }))
+        } catch (err) {
+            console.error('PDF Init Error:', err)
+            setSnackbar({ open: true, message: 'فشل في تحضير الفاتورة', severity: 'error' })
+            setWhatsappDialog({ open: false, receipt: null, pdfBlob: null, generating: false })
+        }
+    }
+
+    const generateInvoicePDF = async (receipt) => {
+        const { default: html2canvas } = await import('html2canvas')
+        const container = document.createElement('div')
+        container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;padding:40px;background:#fff;font-family:Tajawal,Cairo,Arial,sans-serif;direction:rtl;color:#222;'
+        const dateVal = receipt.createdAt || receipt.created_at || receipt.date
+        const dateStr = dateVal ? new Date(dateVal).toLocaleDateString('ar-EG') : '---'
+        const statusInfo = getStatusInfo(receipt.status)
+        const itemsRows = (receipt.items || []).map((item, idx) => {
+            const qty = parseFloat(item.quantity || 0)
+            const cost = parseFloat(item.unit_cost || 0)
+            return `<tr>
+                <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:center;">${idx + 1}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${item.Menu?.name_ar || item.menu_id || '---'}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:center;">${qty}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:center;">${formatCurrency(cost)}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:center;font-weight:600;">${formatCurrency(qty * cost)}</td>
+            </tr>`
+        }).join('')
+        container.innerHTML = `
+            <div style="text-align:center;margin-bottom:24px;">
+                <h1 style="font-size:26px;margin:0 0 4px;color:#1565c0;">فاتورة مشتريات</h1>
+                <p style="margin:0;color:#666;font-size:13px;">Purchase Invoice</p>
+            </div>
+            <div style="display:flex;justify-content:space-between;background:#f5f7fb;border-radius:10px;padding:16px 20px;margin-bottom:20px;border:1px solid #e3e8f0;">
+                <div>
+                    <p style="margin:4px 0;font-size:13px;color:#888;">رقم الفاتورة</p>
+                    <p style="margin:4px 0;font-size:16px;font-weight:700;color:#1565c0;direction:ltr;text-align:right;">${receipt.receipt_number || '---'}</p>
+                    <p style="margin:10px 0 4px;font-size:13px;color:#888;">المورد</p>
+                    <p style="margin:4px 0;font-size:15px;font-weight:600;">${receipt.supplier_name || '---'}</p>
+                </div>
+                <div style="text-align:left;">
+                    <p style="margin:4px 0;font-size:13px;color:#888;">التاريخ</p>
+                    <p style="margin:4px 0;font-size:15px;font-weight:600;">${dateStr}</p>
+                    <p style="margin:10px 0 4px;font-size:13px;color:#888;">المستودع</p>
+                    <p style="margin:4px 0;font-size:15px;font-weight:600;">${receipt.Warehouse?.name_ar || '---'}</p>
+                </div>
+                <div style="text-align:left;">
+                    <p style="margin:4px 0;font-size:13px;color:#888;">الحالة</p>
+                    <p style="margin:4px 0;font-size:14px;font-weight:700;background:#e3f2fd;color:#1565c0;padding:3px 12px;border-radius:12px;display:inline-block;">${statusInfo.label}</p>
+                </div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+                <thead>
+                    <tr style="background:#1976d2;color:#fff;">
+                        <th style="padding:10px 12px;text-align:center;font-size:13px;">#</th>
+                        <th style="padding:10px 12px;text-align:right;font-size:13px;">المنتج</th>
+                        <th style="padding:10px 12px;text-align:center;font-size:13px;">الكمية</th>
+                        <th style="padding:10px 12px;text-align:center;font-size:13px;">سعر الوحدة</th>
+                        <th style="padding:10px 12px;text-align:center;font-size:13px;">الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>${itemsRows}</tbody>
+                <tfoot>
+                    <tr style="background:#f0f4fa;">
+                        <td colspan="4" style="padding:12px;text-align:left;font-weight:800;font-size:15px;">الإجمالي المستحق</td>
+                        <td style="padding:12px;text-align:center;font-weight:800;font-size:17px;color:#1565c0;">${formatCurrency(receipt.total_cost)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <p style="text-align:center;color:#aaa;font-size:11px;margin-top:24px;">تم إنشاء هذه الفاتورة من نظام نقاط البيع \u2014 Zimam POS System</p>
+        `
+        document.body.appendChild(container)
+        try {
+            const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
+            const imgData = canvas.toDataURL('image/png')
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+            const pw = doc.internal.pageSize.getWidth(), ph = doc.internal.pageSize.getHeight()
+            const iw = pw - 20, ih = (canvas.height * iw) / canvas.width
+            const fh = Math.min(ih, ph - 20)
+            const fw = ih > ph - 20 ? (canvas.width * fh) / canvas.height : iw
+            doc.addImage(imgData, 'PNG', 10, 10, fw, fh)
+            return doc
+        } finally { document.body.removeChild(container) }
+    }
+
+        const handleWhatsAppSend = async () => {
+        const { receipt, pdfBlob } = whatsappDialog
+        if (!receipt || !pdfBlob) return
+        try {
+            setWhatsappDialog({ open: false, receipt: null, pdfBlob: null, generating: false })
+            const fileName = `Invoice_${receipt.receipt_number || 'PUR'}.pdf`
+            const textLines = [
+                `📄 فاتورة: ${receipt.receipt_number || '---'}`,
+                `المورد: ${receipt.supplier_name || '---'}`,
+                `الإجمالي: ${formatCurrency(receipt.total_cost)}`,
+                `التاريخ: ${(() => { const d = receipt.createdAt || receipt.created_at; return d ? new Date(d).toLocaleDateString('ar-EG') : '---' })()}`,
+                '', '👇 الفاتورة PDF مرفقة'
+            ].join('\n')
+            // تنظيف الرقم ليكون عبارة عن أرقام فقط بدون + أو 00 لأن API الواتساب يرفض الرموز
+            let cleanPhone = whatsappPhone.replace(/[^0-9]/g, '')
+            if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+            else if (cleanPhone.startsWith('0')) cleanPhone = '2' + cleanPhone
+
+            if (navigator.share && navigator.canShare) {
+                const file = new File([pdfBlob], fileName, { type: 'application/pdf' })
+                const shareData = { title: `فاتورة ${receipt.receipt_number}`, text: textLines, files: [file] }
+                if (navigator.canShare(shareData)) {
+                    await navigator.share(shareData)
+                    setSnackbar({ open: true, message: 'تم مشاركة الفاتورة بنجاح!', severity: 'success' })
+                    return
+                }
+            }
+            const url = URL.createObjectURL(pdfBlob)
+            const a = document.createElement('a')
+            a.href = url; a.download = fileName
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+            
+            const encodedText = encodeURIComponent(textLines)
+            // إجبار المتصفح على فتح (WhatsApp Web) مباشرة لتجنب مشاكل تطبيق الويندوز
+            const waUrl = cleanPhone ? `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}` : `https://web.whatsapp.com/send?text=${encodedText}`
+            
+            // استخدام اسم نافذة محدد (whatsapp_web) بدلاً من _blank لإعادة استخدام نفس التبويب إذا كان مفتوحاً
+            window.open(waUrl, 'whatsapp_web')
+            
+            setSnackbar({ open: true, message: 'تم تحميل الـ PDF. قم بإرفاقه في محادثة الواتساب.', severity: 'info' })
+        } catch (err) {
+            console.error('WhatsApp share error:', err)
+            if (err.name !== 'AbortError') {
+                setSnackbar({ open: true, message: `فشل مشاركة الفاتورة: ${err.message}`, severity: 'error' })
+            }
         }
     }
 
@@ -532,7 +1210,21 @@ export default function PurchaseReceipts() {
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={() => {
-                        reset({ items: [{ menu_id: '', quantity: 1, unit_cost: 0 }] })
+                        reset({
+                            items: [{
+                                menu_id: '',
+                                quantity: 1,
+                                unit_cost: 0,
+                                batch_number: '',
+                                production_date: '',
+                                expiry_date: ''
+                            }],
+                            payment_method: 'credit',
+                            payment_account_code: ''
+                        })
+                        setBulkScanInput('')
+                        setBulkScanQuantity(1)
+                        setBulkScanFeedback({ severity: 'info', message: '', misses: [] })
                         setDialogOpen(true)
                     }}
                 >
@@ -704,6 +1396,11 @@ export default function PurchaseReceipts() {
                                             <IconButton onClick={() => handleView(receipt)} color="primary">
                                                 <ViewIcon />
                                             </IconButton>
+                                            <Tooltip title="مشاركة واتساب">
+                                                <IconButton onClick={() => openWhatsAppDialog(receipt)} sx={{ color: '#25D366' }}>
+                                                    <WhatsAppIcon />
+                                                </IconButton>
+                                            </Tooltip>
                                             {['draft', 'partial'].includes(receipt.status) && (
                                                 <Tooltip title="استلام البضاعة">
                                                     <IconButton onClick={() => handleView(receipt)} color="success">
@@ -887,12 +1584,134 @@ export default function PurchaseReceipts() {
                                 </Box>
                             </Grid>
 
+                            <Grid item xs={12}>
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 2,
+                                        borderStyle: 'dashed',
+                                        borderColor: 'primary.light',
+                                        bgcolor: 'primary.50'
+                                    }}
+                                >
+                                    <Stack
+                                        direction={{ xs: 'column', md: 'row' }}
+                                        spacing={2}
+                                        alignItems={{ xs: 'stretch', md: 'center' }}
+                                        justifyContent="space-between"
+                                        sx={{ mb: 1.5 }}
+                                    >
+                                        <Box>
+                                            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <ScannerIcon color="primary" />
+                                                وضعية الإدخال السريع للفواتير الكبيرة
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                امسح الباركود أو أدخل SKU أو اسم الصنف، وسيتم زيادة الكمية تلقائيًا إذا تكرر الصنف.
+                                            </Typography>
+                                        </Box>
+                                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                                            <Chip color="primary" variant="outlined" label={`${totalLineItems} سطر`} />
+                                            <Chip color="success" variant="outlined" label={`${totalItemQuantity} إجمالي الكمية`} />
+                                        </Stack>
+                                    </Stack>
+
+                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                                        <TextField
+                                            label="مسح باركود / SKU / اسم الصنف"
+                                            value={bulkScanInput}
+                                            onChange={(e) => setBulkScanInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    handleBulkScanSubmit()
+                                                }
+                                            }}
+                                            placeholder="مثال: 123456789 أو SKU-001 أو عدة أكواد كل سطر"
+                                            fullWidth
+                                            InputProps={{
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        <ScannerIcon fontSize="small" color="action" />
+                                                    </InputAdornment>
+                                                )
+                                            }}
+                                            helperText="يمكن لصق عدة أكواد مفصولة بسطر جديد أو فاصلة، ويمكن استخدام CODE*5 لإضافة كمية مباشرة"
+                                        />
+                                        <TextField
+                                            label="الكمية"
+                                            type="number"
+                                            value={bulkScanQuantity}
+                                            onChange={(e) => setBulkScanQuantity(e.target.value)}
+                                            inputProps={{ min: 0.01, step: 1 }}
+                                            sx={{ minWidth: { xs: '100%', md: 120 } }}
+                                        />
+                                        <Button
+                                            variant="contained"
+                                            onClick={handleBulkScanSubmit}
+                                            disabled={!bulkScanInput.trim()}
+                                            sx={{ minWidth: { xs: '100%', md: 160 } }}
+                                        >
+                                            إضافة مباشرة
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            color="secondary"
+                                            startIcon={<CameraIcon />}
+                                            onClick={openScanDialog}
+                                            sx={{ minWidth: { xs: '100%', md: 170 } }}
+                                        >
+                                            مسح بالكاميرا
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<UploadIcon />}
+                                            onClick={openScanDialog}
+                                            sx={{ minWidth: { xs: '100%', md: 170 } }}
+                                        >
+                                            رفع صورة
+                                        </Button>
+                                    </Stack>
+
+                                    {bulkScanFeedback.message && (
+                                        <Alert
+                                            severity={bulkScanFeedback.severity}
+                                            sx={{ mt: 1.5 }}
+                                            onClose={() => setBulkScanFeedback({ severity: 'info', message: '', misses: [] })}
+                                        >
+                                            <Typography variant="body2">{bulkScanFeedback.message}</Typography>
+                                            {bulkScanFeedback.misses.length > 0 && (
+                                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                                                    الأكواد غير المعروفة: {bulkScanFeedback.misses.join('، ')}
+                                                </Typography>
+                                            )}
+                                        </Alert>
+                                    )}
+                                    <input
+                                        ref={fileScanInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageScan}
+                                        style={{ display: 'none' }}
+                                    />
+                                </Paper>
+                            </Grid>
+
                             {/* ===== ITEMS WITH PRODUCT AUTOCOMPLETE + Quick-Add ===== */}
                             <Grid item xs={12}>
                                 <Divider sx={{ my: 1 }} />
                                 <Typography variant="h6" sx={{ mt: 1, mb: 1 }}>المنتجات</Typography>
                                 {fields.map((field, index) => (
-                                    <Box key={field.id} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'flex-start' }}>
+                                    <Box
+                                        key={field.id}
+                                        sx={{
+                                            display: 'flex',
+                                            gap: 1,
+                                            mb: 1,
+                                            alignItems: 'flex-start',
+                                            flexWrap: 'wrap'
+                                        }}
+                                    >
                                         <Controller
                                             name={`items.${index}.menu_id`}
                                             control={control}
@@ -931,12 +1750,14 @@ export default function PurchaseReceipts() {
                                                         return (
                                                             <li {...props} key={option.id}>
                                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                                                    <Typography>{option.name_ar}</Typography>
-                                                                    {option.sku && (
-                                                                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                                                            {option.sku}
-                                                                        </Typography>
-                                                                    )}
+                                                                    <Box>
+                                                                        <Typography>{option.name_ar}</Typography>
+                                                                        {(option.sku || option.barcode) && (
+                                                                            <Typography variant="caption" color="text.secondary">
+                                                                                {[option.sku, option.barcode].filter(Boolean).join(' - ')}
+                                                                            </Typography>
+                                                                        )}
+                                                                    </Box>
                                                                 </Box>
                                                             </li>
                                                         )
@@ -953,7 +1774,7 @@ export default function PurchaseReceipts() {
                                                     filterOptions={(options, params) => {
                                                         const filtered = options.filter(opt => {
                                                             if (opt._isAction) return true
-                                                            const label = (opt.name_ar || '') + ' ' + (opt.sku || '')
+                                                            const label = [(opt.name_ar || ''), (opt.sku || ''), (opt.barcode || '')].join(' ')
                                                             return label.toLowerCase().includes((params.inputValue || '').toLowerCase())
                                                         })
                                                         return filtered
@@ -986,12 +1807,56 @@ export default function PurchaseReceipts() {
                                             sx={{ flex: 1 }}
                                             {...register(`items.${index}.unit_cost`, { required: true, min: 0 })}
                                         />
+                                        <TextField
+                                            label="رقم التشغيلة"
+                                            size="small"
+                                            sx={{ flex: 1, minWidth: 150 }}
+                                            {...register(`items.${index}.batch_number`)}
+                                        />
+                                        <TextField
+                                            label="تاريخ الإنتاج"
+                                            type="date"
+                                            size="small"
+                                            sx={{ flex: 1, minWidth: 170 }}
+                                            InputLabelProps={{ shrink: true }}
+                                            {...register(`items.${index}.production_date`)}
+                                        />
+                                        <TextField
+                                            label="تاريخ الانتهاء"
+                                            type="date"
+                                            size="small"
+                                            sx={{ flex: 1, minWidth: 170 }}
+                                            InputLabelProps={{ shrink: true }}
+                                            error={Boolean(
+                                                watch(`items.${index}.production_date`) &&
+                                                watch(`items.${index}.expiry_date`) &&
+                                                watch(`items.${index}.expiry_date`) < watch(`items.${index}.production_date`)
+                                            )}
+                                            helperText={
+                                                watch(`items.${index}.production_date`) &&
+                                                watch(`items.${index}.expiry_date`) &&
+                                                watch(`items.${index}.expiry_date`) < watch(`items.${index}.production_date`)
+                                                    ? 'تاريخ الانتهاء يجب أن يكون بعد تاريخ الإنتاج'
+                                                    : 'اختياري'
+                                            }
+                                            {...register(`items.${index}.expiry_date`)}
+                                        />
                                         <IconButton color="error" onClick={() => remove(index)}>
                                             <DeleteIcon />
                                         </IconButton>
                                     </Box>
                                 ))}
-                                <Button startIcon={<AddIcon />} onClick={() => append({ menu_id: '', quantity: 1, unit_cost: 0 })}>
+                                <Button
+                                    startIcon={<AddIcon />}
+                                    onClick={() => append({
+                                        menu_id: '',
+                                        quantity: 1,
+                                        unit_cost: 0,
+                                        batch_number: '',
+                                        production_date: '',
+                                        expiry_date: ''
+                                    })}
+                                >
                                     إضافة سطر
                                 </Button>
                             </Grid>
@@ -1029,6 +1894,101 @@ export default function PurchaseReceipts() {
                         </Button>
                     </DialogActions>
                 </form>
+            </Dialog>
+
+            <Dialog open={scanDialogOpen} onClose={closeScanDialog} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ScannerIcon color="primary" />
+                    مسح الباركود بالكاميرا أو من صورة
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Alert severity={scanStatus.severity}>
+                            <Typography variant="body2">{scanStatus.message}</Typography>
+                            {!window.isSecureContext && (
+                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                                    ملاحظة: الكاميرا على الهاتف لن تعمل من الرابط المحلي `http://192.168...`، ويجب فتح الصفحة عبر HTTPS.
+                                </Typography>
+                            )}
+                        </Alert>
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+                            <Button
+                                variant="contained"
+                                startIcon={<CameraIcon />}
+                                onClick={startCameraScan}
+                                disabled={scannerProcessing}
+                                fullWidth
+                            >
+                                تشغيل الكاميرا
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<UploadIcon />}
+                                onClick={() => fileScanInputRef.current?.click()}
+                                disabled={scannerProcessing}
+                                fullWidth
+                            >
+                                رفع صورة باركود
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<StopIcon />}
+                                onClick={stopCameraScan}
+                                disabled={!cameraRunning}
+                                fullWidth
+                            >
+                                إيقاف
+                            </Button>
+                        </Stack>
+
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                p: 1,
+                                borderRadius: 2,
+                                bgcolor: 'grey.50'
+                            }}
+                        >
+                            <Box
+                                component="video"
+                                ref={cameraVideoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 240,
+                                    maxHeight: 320,
+                                    bgcolor: '#111',
+                                    borderRadius: 1.5,
+                                    objectFit: 'cover'
+                                }}
+                            />
+                            {!cameraRunning && (
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>
+                                    يمكنك تشغيل الكاميرا لمسح مباشر، أو رفع صورة محفوظة للباركود.
+                                </Typography>
+                            )}
+                        </Paper>
+
+                        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+                                آخر قراءة
+                            </Typography>
+                            <Typography variant="body2" color={lastDetectedCode ? 'text.primary' : 'text.secondary'}>
+                                {lastDetectedCode || 'لا توجد قراءة بعد'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                                سيتم إدخال الكود مباشرة باستخدام الكمية الحالية: {bulkScanQuantity || 1}
+                            </Typography>
+                        </Paper>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeScanDialog}>إغلاق</Button>
+                </DialogActions>
             </Dialog>
 
             {/* ==================== VIEW DIALOG ==================== */}
@@ -1149,6 +2109,14 @@ export default function PurchaseReceipts() {
                         </DialogContent>
                         <DialogActions>
                             <Button onClick={() => setViewDialogOpen(false)}>إغلاق</Button>
+                            <Button
+                                variant="contained"
+                                sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#1da851' }, color: '#fff' }}
+                                startIcon={<WhatsAppIcon />}
+                                onClick={() => { setViewDialogOpen(false); openWhatsAppDialog(selectedReceipt) }}
+                            >
+                                مشاركة واتساب
+                            </Button>
                             {['draft', 'partial'].includes(selectedReceipt.status) && (
                                 <>
                                     <Button
@@ -1198,6 +2166,9 @@ export default function PurchaseReceipts() {
                         <Table size="small">
                             <TableHead>
                                 <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                    <TableCell align="center" sx={{ minWidth: 140 }}>رقم التشغيلة</TableCell>
+                                    <TableCell align="center" sx={{ minWidth: 145 }}>تاريخ الإنتاج</TableCell>
+                                    <TableCell align="center" sx={{ minWidth: 145 }}>تاريخ الانتهاء</TableCell>
                                     <TableCell>المنتج</TableCell>
                                     <TableCell align="center">المطلوب</TableCell>
                                     <TableCell align="center">المستلم سابقًا</TableCell>
@@ -1208,6 +2179,58 @@ export default function PurchaseReceipts() {
                             <TableBody>
                                 {receiveItems.map((item, idx) => (
                                     <TableRow key={item.id} sx={item.quantity_remaining <= 0 ? { opacity: 0.5, bgcolor: 'success.50' } : {}}>
+                                        <TableCell align="center">
+                                            <TextField
+                                                size="small"
+                                                value={item.batch_number}
+                                                onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setReceiveItems(prev =>
+                                                        prev.map((ri, i) =>
+                                                            i === idx ? { ...ri, batch_number: value } : ri
+                                                        )
+                                                    )
+                                                }}
+                                                placeholder="اختياري"
+                                                sx={{ minWidth: 120 }}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <TextField
+                                                type="date"
+                                                size="small"
+                                                value={item.production_date || ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setReceiveItems(prev =>
+                                                        prev.map((ri, i) =>
+                                                            i === idx ? { ...ri, production_date: value } : ri
+                                                        )
+                                                    )
+                                                }}
+                                                InputLabelProps={{ shrink: true }}
+                                                sx={{ minWidth: 135 }}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <TextField
+                                                type="date"
+                                                size="small"
+                                                value={item.expiry_date || ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setReceiveItems(prev =>
+                                                        prev.map((ri, i) =>
+                                                            i === idx ? { ...ri, expiry_date: value } : ri
+                                                        )
+                                                    )
+                                                }}
+                                                InputLabelProps={{ shrink: true }}
+                                                sx={{ minWidth: 135 }}
+                                                error={Boolean(item.production_date && item.expiry_date && item.expiry_date < item.production_date)}
+                                                helperText={item.production_date && item.expiry_date && item.expiry_date < item.production_date ? 'الانتهاء قبل الإنتاج' : ' '}
+                                            />
+                                        </TableCell>
                                         <TableCell>
                                             <Typography fontWeight="bold">{item.productName}</Typography>
                                             <Typography variant="caption" color="text.secondary">
@@ -1508,6 +2531,54 @@ export default function PurchaseReceipts() {
             </Dialog>
 
             {/* ==================== SNACKBAR ==================== */}
+
+            {/* ==================== WHATSAPP PHONE DIALOG ==================== */}
+            <Dialog
+                open={whatsappDialog.open}
+                onClose={() => setWhatsappDialog({ open: false, receipt: null })}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <WhatsAppIcon sx={{ color: '#25D366', fontSize: 28 }} />
+                    <Typography variant="h6">إرسال الفاتورة عبر واتساب</Typography>
+                </DialogTitle>
+                <DialogContent>
+                    {whatsappDialog.receipt && (
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            فاتورة: <strong>{whatsappDialog.receipt.receipt_number}</strong> | الإجمالي: <strong>{formatCurrency(whatsappDialog.receipt.total_cost)}</strong>
+                        </Alert>
+                    )}
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        label="رقم الهاتف (واتساب)"
+                        placeholder="01xxxxxxxxx"
+                        value={whatsappPhone}
+                        onChange={(e) => setWhatsappPhone(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && whatsappPhone.trim()) handleWhatsAppSend() }}
+                        sx={{ mt: 1 }}
+                        InputProps={{
+                            startAdornment: <InputAdornment position="start"><WhatsAppIcon sx={{ color: '#25D366' }} /></InputAdornment>,
+                            sx: { direction: 'ltr' }
+                        }}
+                        helperText="أدخل رقم الهاتف الذي تريد إرسال الفاتورة إليه"
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setWhatsappDialog({ open: false, receipt: null })}>إلغاء</Button>
+                    <Button
+                        variant="contained"
+                        disabled={!whatsappPhone.trim() || whatsappDialog.generating}
+                        onClick={handleWhatsAppSend}
+                        sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#1da851' }, color: '#fff', borderRadius: 2, px: 4 }}
+                        startIcon={whatsappDialog.generating ? <CircularProgress size={20} color="inherit" /> : <WhatsAppIcon />}
+                    >
+                        {whatsappDialog.generating ? 'جاري التجهيز...' : 'إرسال'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={4000}

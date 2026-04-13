@@ -170,15 +170,23 @@ class NotificationService {
      * Order approved and sent to kitchen
      */
     async orderApproved(order) {
+        const settings = loadSettings()
+        const kdsEnabled = settings?.hardware?.enableKitchenDisplay === true
+        const printKitchenReceipt = settings?.workflow?.printKitchenReceipt !== false
+
         return this.send({
             type: 'order_approved',
             title: 'تمت الموافقة على الطلب',
-            message: `طلب #${order.order_number} تم إرساله للمطبخ`,
-            target_role: 'chef',
+            message: kdsEnabled
+                ? `طلب #${order.order_number} تم إرساله للمطبخ`
+                : (printKitchenReceipt
+                    ? `طلب #${order.order_number} تمت الموافقة عليه وطباعة أمر المطبخ`
+                    : `طلب #${order.order_number} تمت الموافقة عليه وينتظر المتابعة من شاشة الطلبات`),
+            target_role: kdsEnabled ? 'chef' : 'cashier',
             entity_type: 'order',
             entity_id: order.id,
-            action_url: `/kitchen`,
-            icon: '✅',
+            action_url: kdsEnabled ? `/kitchen` : `/orders`,
+            icon: kdsEnabled ? '✅' : '🧾',
             priority: 'high',
             play_sound: true,
             branch_id: order.branch_id,

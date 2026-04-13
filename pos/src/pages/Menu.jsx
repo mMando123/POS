@@ -3,6 +3,7 @@ import {
     Alert,
     Box,
     Button,
+    Checkbox,
     Chip,
     CircularProgress,
     Dialog,
@@ -16,6 +17,7 @@ import {
     MenuItem,
     Paper,
     Stack,
+    Snackbar,
     Switch,
     Table,
     TableBody,
@@ -29,14 +31,18 @@ import {
 } from '@mui/material'
 import {
     Add as AddIcon,
+    AutoFixHigh as AutoFixHighIcon,
     CloudUpload as CloudUploadIcon,
     Delete as DeleteIcon,
     Edit as EditIcon,
+    Print as PrintIcon,
+    QrCode2 as QrCodeIcon,
     Refresh as RefreshIcon,
     Search as SearchIcon
 } from '@mui/icons-material'
 import { categoryAPI, menuAPI, uploadAPI } from '../services/api'
 import { usePermission, PERMISSIONS } from '../components/ProtectedRoute'
+import { openBarcodePrintWindow } from '../utils/barcodePrint'
 
 const ITEM_TYPES = ['sellable', 'raw_material', 'consumable']
 const UOM_OPTIONS = ['piece', 'kg', 'g', 'l', 'ml', 'box', 'pack', 'portion']
@@ -66,6 +72,7 @@ const EMPTY_FORM = {
     unit_of_measure: 'piece',
     is_available: true,
     track_stock: true,
+    option_groups: [],
     min_stock: 5  // DEF-007: قيمة افتراضية لتفعيل تنبيه نقص المخزون
 }
 
@@ -74,6 +81,24 @@ const EMPTY_INGREDIENT_LINE = {
     ingredient_menu_id: '',
     quantity: 1,
     unit: 'piece'
+}
+
+const EMPTY_OPTION = {
+    id: '',
+    name_ar: '',
+    name_en: '',
+    price_delta: 0,
+    is_default: false
+}
+
+const EMPTY_OPTION_GROUP = {
+    id: '',
+    name_ar: '',
+    name_en: '',
+    group_type: 'modifier',
+    selection_type: 'single',
+    required: false,
+    options: [{ ...EMPTY_OPTION }]
 }
 
 const EMPTY_CATEGORY_FORM = {
@@ -90,6 +115,8 @@ const toNumber = (value, fallback = 0) => {
     const parsed = Number(value)
     return Number.isFinite(parsed) ? parsed : fallback
 }
+
+const createDraftId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
 const normalizeApiBase = () => {
     let base = import.meta.env.VITE_API_URL || '/api'
@@ -201,6 +228,16 @@ export default function Menu() {
 
     const [deleteTarget, setDeleteTarget] = useState(null)
     const [deleting, setDeleting] = useState(false)
+    const [selectedIds, setSelectedIds] = useState([])
+    const [barcodeActionLoading, setBarcodeActionLoading] = useState(false)
+    const [barcodeFieldLoading, setBarcodeFieldLoading] = useState(false)
+    const [printDialog, setPrintDialog] = useState({ open: false, title: '', items: [] })
+    const [printCopies, setPrintCopies] = useState(1)
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        severity: 'success',
+        message: ''
+    })
 
     const fetchData = useCallback(async (silent = false) => {
         if (silent) {
@@ -231,6 +268,10 @@ export default function Menu() {
     useEffect(() => {
         fetchData(false)
     }, [fetchData])
+
+    useEffect(() => {
+        setSelectedIds((prev) => prev.filter((id) => items.some((item) => item.id === id)))
+    }, [items])
 
     const categoryMap = useMemo(() => {
         const map = new Map()
@@ -275,6 +316,14 @@ export default function Menu() {
         })
     }, [availabilityFilter, categoryFilter, items, search])
 
+    const selectedItems = useMemo(
+        () => items.filter((item) => selectedIds.includes(item.id)),
+        [items, selectedIds]
+    )
+
+    const allFilteredSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedIds.includes(item.id))
+    const someFilteredSelected = filteredItems.some((item) => selectedIds.includes(item.id))
+
     const openCreateDialog = () => {
         setEditingItem(null)
         setForm({ ...EMPTY_FORM, ingredients: [] })
@@ -301,6 +350,25 @@ export default function Menu() {
                 })()
             }))
             : []
+        const optionGroups = Array.isArray(item.option_groups)
+            ? item.option_groups.map((group) => ({
+                id: group.id || createDraftId('group'),
+                name_ar: group.name_ar || '',
+                name_en: group.name_en || '',
+                group_type: group.group_type || 'modifier',
+                selection_type: group.selection_type || 'single',
+                required: Boolean(group.required),
+                options: Array.isArray(group.options) && group.options.length > 0
+                    ? group.options.map((option) => ({
+                        id: option.id || createDraftId('opt'),
+                        name_ar: option.name_ar || '',
+                        name_en: option.name_en || '',
+                        price_delta: option.price_delta ?? 0,
+                        is_default: Boolean(option.is_default)
+                    }))
+                    : [{ ...EMPTY_OPTION, id: createDraftId('opt') }]
+            }))
+            : []
         setForm({
             name_ar: item.name_ar || '',
             name_en: item.name_en || '',
@@ -315,11 +383,100 @@ export default function Menu() {
             unit_of_measure: itemHasCustomUom ? CUSTOM_UOM_VALUE : normalizedItemUom,
             is_available: Boolean(item.is_available),
             track_stock: Boolean(item.track_stock),
+            option_groups: optionGroups,
             min_stock: item.min_stock ?? 5  // DEF-007
         })
         setCustomUom(itemHasCustomUom ? normalizedItemUom : '')
         setFormError('')
         setDialogOpen(true)
+    }
+
+    const requestNextInternalBarcode = async () => {
+        try {
+            setBarcodeFieldLoading(true)
+            const response = await menuAPI.getNextBarcode()
+            const nextBarcode = response.data?.data?.barcode || ''
+            setForm((prev) => ({ ...prev, barcode: nextBarcode }))
+            setFormError('')
+        } catch (err) {
+            setFormError(getErrorMessage(err, 'تعذر توليد باركود داخلي الآن'))
+        } finally {
+            setBarcodeFieldLoading(false)
+        }
+    }
+
+    const toggleItemSelection = (itemId) => {
+        setSelectedIds((prev) => (
+            prev.includes(itemId)
+                ? prev.filter((id) => id !== itemId)
+                : [...prev, itemId]
+        ))
+    }
+
+    const toggleFilteredSelection = () => {
+        const filteredIds = filteredItems.map((item) => item.id)
+        setSelectedIds((prev) => {
+            if (filteredIds.every((id) => prev.includes(id))) {
+                return prev.filter((id) => !filteredIds.includes(id))
+            }
+            return [...new Set([...prev, ...filteredIds])]
+        })
+    }
+
+    const openBarcodePrintDialog = (itemsToPrint, title) => {
+        if (!itemsToPrint.length) {
+            setError('لا توجد أصناف جاهزة للطباعة')
+            return
+        }
+
+        setPrintCopies(1)
+        setPrintDialog({
+            open: true,
+            title,
+            items: itemsToPrint
+        })
+    }
+
+    const handlePrintBarcodes = () => {
+        try {
+            openBarcodePrintWindow({
+                items: printDialog.items,
+                copies: printCopies,
+                title: printDialog.title || 'طباعة باركود المنتجات'
+            })
+            setPrintDialog({ open: false, title: '', items: [] })
+        } catch (err) {
+            setError(getErrorMessage(err, 'تعذر فتح نافذة الطباعة'))
+        }
+    }
+
+    const handleGenerateBarcodes = async ({ ids, overwrite, successLabel }) => {
+        const targetIds = [...new Set((ids || []).filter(Boolean))]
+        if (!targetIds.length) {
+            setError('اختر صنفًا واحدًا على الأقل أولًا')
+            return
+        }
+
+        try {
+            setBarcodeActionLoading(true)
+            setError('')
+            const response = await menuAPI.generateBarcodes({ ids: targetIds, overwrite: Boolean(overwrite) })
+            const updatedCount = response.data?.data?.updated_count || 0
+            const skippedCount = response.data?.data?.skipped_count || 0
+
+            await fetchData(true)
+            setSnackbar({
+                open: true,
+                severity: updatedCount > 0 ? 'success' : 'info',
+                message: updatedCount > 0
+                    ? `${successLabel || 'تم توليد الباركودات'} (${updatedCount})${skippedCount ? ` - تم تخطي ${skippedCount}` : ''}`
+                    : 'لم يتم تعديل أي صنف'
+            })
+        } catch (err) {
+            setError(getErrorMessage(err, 'تعذر توليد الباركودات'))
+        } finally {
+            setBarcodeActionLoading(false)
+        }
     }
 
     const handleImageUpload = async (event) => {
@@ -385,6 +542,111 @@ export default function Menu() {
             ...prev,
             ingredients: [...(Array.isArray(prev.ingredients) ? prev.ingredients : []), { ...EMPTY_INGREDIENT_LINE }]
         }))
+    }
+
+    const addOptionGroup = () => {
+        setForm((prev) => ({
+            ...prev,
+            option_groups: [
+                ...(Array.isArray(prev.option_groups) ? prev.option_groups : []),
+                {
+                    ...EMPTY_OPTION_GROUP,
+                    id: createDraftId('group'),
+                    options: [{ ...EMPTY_OPTION, id: createDraftId('opt') }]
+                }
+            ]
+        }))
+    }
+
+    const updateOptionGroup = (groupIndex, patch) => {
+        setForm((prev) => {
+            const nextGroups = [...(Array.isArray(prev.option_groups) ? prev.option_groups : [])]
+            const current = nextGroups[groupIndex] || { ...EMPTY_OPTION_GROUP }
+            const nextGroup = { ...current, ...patch }
+
+            if (Object.prototype.hasOwnProperty.call(patch, 'selection_type') && patch.selection_type === 'single') {
+                let defaultSeen = false
+                nextGroup.options = (Array.isArray(nextGroup.options) ? nextGroup.options : []).map((option) => {
+                    if (!option.is_default) return option
+                    if (!defaultSeen) {
+                        defaultSeen = true
+                        return option
+                    }
+                    return { ...option, is_default: false }
+                })
+            }
+
+            nextGroups[groupIndex] = nextGroup
+            return { ...prev, option_groups: nextGroups }
+        })
+    }
+
+    const removeOptionGroup = (groupIndex) => {
+        setForm((prev) => {
+            const nextGroups = [...(Array.isArray(prev.option_groups) ? prev.option_groups : [])]
+            nextGroups.splice(groupIndex, 1)
+            return { ...prev, option_groups: nextGroups }
+        })
+    }
+
+    const addOptionToGroup = (groupIndex) => {
+        setForm((prev) => {
+            const nextGroups = [...(Array.isArray(prev.option_groups) ? prev.option_groups : [])]
+            const current = nextGroups[groupIndex]
+            if (!current) return prev
+
+            nextGroups[groupIndex] = {
+                ...current,
+                options: [
+                    ...(Array.isArray(current.options) ? current.options : []),
+                    { ...EMPTY_OPTION, id: createDraftId('opt') }
+                ]
+            }
+            return { ...prev, option_groups: nextGroups }
+        })
+    }
+
+    const updateOptionInGroup = (groupIndex, optionIndex, patch) => {
+        setForm((prev) => {
+            const nextGroups = [...(Array.isArray(prev.option_groups) ? prev.option_groups : [])]
+            const current = nextGroups[groupIndex]
+            if (!current) return prev
+
+            const nextOptions = [...(Array.isArray(current.options) ? current.options : [])]
+            const currentOption = nextOptions[optionIndex]
+            if (!currentOption) return prev
+
+            if (current.selection_type === 'single' && patch.is_default) {
+                nextGroups[groupIndex] = {
+                    ...current,
+                    options: nextOptions.map((option, idx) => ({
+                        ...option,
+                        is_default: idx === optionIndex
+                    }))
+                }
+            } else {
+                nextOptions[optionIndex] = {
+                    ...currentOption,
+                    ...patch
+                }
+                nextGroups[groupIndex] = { ...current, options: nextOptions }
+            }
+
+            return { ...prev, option_groups: nextGroups }
+        })
+    }
+
+    const removeOptionFromGroup = (groupIndex, optionIndex) => {
+        setForm((prev) => {
+            const nextGroups = [...(Array.isArray(prev.option_groups) ? prev.option_groups : [])]
+            const current = nextGroups[groupIndex]
+            if (!current) return prev
+
+            const nextOptions = [...(Array.isArray(current.options) ? current.options : [])]
+            nextOptions.splice(optionIndex, 1)
+            nextGroups[groupIndex] = { ...current, options: nextOptions }
+            return { ...prev, option_groups: nextGroups }
+        })
     }
 
     const updateIngredientLine = (index, patch) => {
@@ -460,6 +722,50 @@ export default function Menu() {
             return
         }
 
+        let normalizedOptionGroups = []
+        if (form.item_type === 'sellable') {
+            try {
+                normalizedOptionGroups = (Array.isArray(form.option_groups) ? form.option_groups : []).map((group, groupIndex) => {
+                    const groupName = String(group.name_ar || '').trim()
+                    if (!groupName) {
+                        throw new Error(`اسم مجموعة الخيارات رقم ${groupIndex + 1} مطلوب`)
+                    }
+
+                    const normalizedOptions = (Array.isArray(group.options) ? group.options : [])
+                        .map((option) => ({
+                            id: option.id || createDraftId('opt'),
+                            name_ar: String(option.name_ar || '').trim(),
+                            name_en: String(option.name_en || '').trim() || null,
+                            price_delta: toNumber(option.price_delta, 0),
+                            is_default: Boolean(option.is_default)
+                        }))
+                        .filter((option) => option.name_ar)
+
+                    if (normalizedOptions.length === 0) {
+                        throw new Error(`مجموعة "${groupName}" يجب أن تحتوي على خيار واحد على الأقل`)
+                    }
+
+                    return {
+                        id: group.id || createDraftId('group'),
+                        name_ar: groupName,
+                        name_en: String(group.name_en || '').trim() || null,
+                        group_type: group.group_type === 'variant' ? 'variant' : 'modifier',
+                        selection_type: group.selection_type === 'multiple' ? 'multiple' : 'single',
+                        required: Boolean(group.required),
+                        options: normalizedOptions.map((option, optionIndex) => ({
+                            ...option,
+                            is_default: (group.selection_type === 'multiple')
+                                ? option.is_default
+                                : normalizedOptions.findIndex((candidate) => candidate.is_default) === optionIndex
+                        }))
+                    }
+                })
+            } catch (validationError) {
+                setFormError(validationError.message || 'بيانات الخيارات غير صحيحة')
+                return
+            }
+        }
+
         const payload = {
             name_ar: String(form.name_ar || '').trim(),
             name_en: String(form.name_en || '').trim() || null,
@@ -473,6 +779,7 @@ export default function Menu() {
             unit_of_measure: resolvedUnitOfMeasure,
             is_available: Boolean(form.is_available),
             track_stock: Boolean(form.track_stock),
+            option_groups: normalizedOptionGroups,
             min_stock: toNumber(form.min_stock, 0),  // DEF-007
             ingredients: normalizedIngredients
         }
@@ -533,17 +840,60 @@ export default function Menu() {
         <Stack spacing={2}>
             <Paper sx={{ p: 3, borderRadius: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" spacing={1.5}>
-                    <Box sx={{ textAlign: { xs: 'start', md: 'end' }, order: { xs: 1, md: 1 } }}>
+                    <Box sx={{ textAlign: { xs: 'start', md: 'end' }, order: { xs: 1, md: 0 } }}>
                         <Typography variant="h4" fontWeight="bold">إدارة المنيو</Typography>
                         <Typography variant="h6" color="text.secondary">إدارة المنتجات والتصنيفات</Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={1.5} sx={{ order: { xs: 2, md: 0 }, flexWrap: 'wrap' }}>
+                    <Stack direction="row" spacing={1.5} sx={{ order: { xs: 2, md: 1 }, flexWrap: 'wrap' }}>
                         {canCreate && (
                             <Button variant="contained" startIcon={<AddIcon />} sx={{ minWidth: 170 }} onClick={openCreateDialog}>
                                 إضافة صنف
                             </Button>
                         )}
+                        {canUpdate && (
+                            <Button
+                                variant="outlined"
+                                color="secondary"
+                                startIcon={<AutoFixHighIcon />}
+                                sx={{ minWidth: 190 }}
+                                disabled={barcodeActionLoading || selectedItems.length === 0}
+                                onClick={() => {
+                                    const hasExisting = selectedItems.some((item) => String(item.barcode || '').trim())
+                                    const confirmMessage = hasExisting
+                                        ? `سيتم استبدال الباركود الحالي لبعض الأصناف المحددة (${selectedItems.length}). هل تريد المتابعة؟`
+                                        : `سيتم توليد باركود داخلي سهل لـ ${selectedItems.length} صنف. هل تريد المتابعة؟`
+                                    if (!window.confirm(confirmMessage)) return
+                                    handleGenerateBarcodes({
+                                        ids: selectedItems.map((item) => item.id),
+                                        overwrite: true,
+                                        successLabel: 'تم توحيد الباركود الداخلي للمحدد'
+                                    })
+                                }}
+                            >
+                                توليد باركود سهل للمحدد
+                            </Button>
+                        )}
+                        <Button
+                            variant="outlined"
+                            color="info"
+                            startIcon={<PrintIcon />}
+                            sx={{ minWidth: 170 }}
+                            disabled={selectedItems.length === 0}
+                            onClick={() => openBarcodePrintDialog(selectedItems, 'طباعة باركود الأصناف المحددة')}
+                        >
+                            طباعة المحدد
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            color="info"
+                            startIcon={<QrCodeIcon />}
+                            sx={{ minWidth: 170 }}
+                            disabled={filteredItems.length === 0}
+                            onClick={() => openBarcodePrintDialog(filteredItems, 'طباعة باركود جميع النتائج')}
+                        >
+                            طباعة كل النتائج
+                        </Button>
                         {canManageCategories && (
                             <Button
                                 variant="outlined"
@@ -619,6 +969,16 @@ export default function Menu() {
                         </TextField>
                     </Grid>
                 </Grid>
+                <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+                    <Chip label={`عدد النتائج: ${filteredItems.length}`} color="primary" variant="outlined" />
+                    <Chip label={`المحدد: ${selectedItems.length}`} color={selectedItems.length ? 'secondary' : 'default'} variant="outlined" />
+                    <Chip
+                        label={allFilteredSelected ? 'إلغاء تحديد النتائج الحالية' : 'تحديد النتائج الحالية'}
+                        color={someFilteredSelected ? 'secondary' : 'default'}
+                        onClick={toggleFilteredSelection}
+                        clickable
+                    />
+                </Stack>
             </Paper>
 
             <Paper sx={{ borderRadius: 2 }}>
@@ -626,8 +986,17 @@ export default function Menu() {
                     <Table size="small">
                         <TableHead>
                             <TableRow>
+                                <TableCell padding="checkbox">
+                                    <Checkbox
+                                        checked={allFilteredSelected}
+                                        indeterminate={!allFilteredSelected && someFilteredSelected}
+                                        onChange={toggleFilteredSelection}
+                                        inputProps={{ 'aria-label': 'تحديد جميع النتائج الحالية' }}
+                                    />
+                                </TableCell>
                                 <TableCell>الاسم</TableCell>
                                 <TableCell>التصنيف</TableCell>
+                                <TableCell>SKU / الباركود</TableCell>
                                 <TableCell align="right">السعر</TableCell>
                                 <TableCell>النوع</TableCell>
                                 <TableCell>الوحدة</TableCell>
@@ -642,11 +1011,48 @@ export default function Menu() {
                                 const imageSrc = resolveImageUrl(item.image_url)
                                 return (
                                     <TableRow key={item.id} hover>
+                                        <TableCell padding="checkbox">
+                                            <Checkbox
+                                                checked={selectedIds.includes(item.id)}
+                                                onChange={() => toggleItemSelection(item.id)}
+                                                inputProps={{ 'aria-label': `تحديد ${item.name_ar}` }}
+                                            />
+                                        </TableCell>
                                         <TableCell>
-                                            <Typography variant="h6" fontWeight={500}>{item.name_ar}</Typography>
+                                            <Stack spacing={0.25}>
+                                                <Typography variant="h6" fontWeight={500}>{item.name_ar}</Typography>
+                                                {item.name_en && (
+                                                    <Typography variant="body2" color="text.secondary">{item.name_en}</Typography>
+                                                )}
+                                            </Stack>
                                         </TableCell>
                                         <TableCell>
                                             <Typography variant="h6">{category?.name_ar || '-'}</Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Stack spacing={0.5}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    SKU: {item.sku || '-'}
+                                                </Typography>
+                                                {item.barcode ? (
+                                                    <Chip
+                                                        size="small"
+                                                        icon={<QrCodeIcon />}
+                                                        color="info"
+                                                        variant="outlined"
+                                                        label={item.barcode}
+                                                        sx={{ width: 'fit-content', maxWidth: '100%' }}
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        size="small"
+                                                        color="default"
+                                                        variant="outlined"
+                                                        label="بدون باركود"
+                                                        sx={{ width: 'fit-content' }}
+                                                    />
+                                                )}
+                                            </Stack>
                                         </TableCell>
                                         <TableCell align="right">
                                             <Typography variant="h6">{toNumber(item.price).toFixed(2)}</Typography>
@@ -667,6 +1073,9 @@ export default function Menu() {
                                                 {Array.isArray(item.recipeIngredients) && item.recipeIngredients.length > 0 && (
                                                     <Chip size="small" color="info" variant="outlined" label="تجميعي" />
                                                 )}
+                                                {Array.isArray(item.option_groups) && item.option_groups.length > 0 && (
+                                                    <Chip size="small" color="secondary" variant="outlined" label="خيارات" />
+                                                )}
                                                 {item.track_stock && <Chip size="small" variant="outlined" color="warning" label="مخزون" />}
                                             </Stack>
                                         </TableCell>
@@ -685,6 +1094,17 @@ export default function Menu() {
                                         {(canUpdate || canDelete) && (
                                             <TableCell align="right">
                                                 <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                                    <Tooltip title="طباعة الباركود">
+                                                        <span>
+                                                            <IconButton
+                                                                color="info"
+                                                                disabled={!item.barcode}
+                                                                onClick={() => openBarcodePrintDialog([item], `طباعة باركود ${item.name_ar}`)}
+                                                            >
+                                                                <PrintIcon />
+                                                            </IconButton>
+                                                        </span>
+                                                    </Tooltip>
                                                     {canDelete && (
                                                         <Tooltip title="حذف">
                                                             <IconButton color="error" onClick={() => setDeleteTarget(item)}>
@@ -708,7 +1128,7 @@ export default function Menu() {
 
                             {!filteredItems.length && (
                                 <TableRow>
-                                    <TableCell colSpan={canUpdate || canDelete ? 8 : 7}>
+                                    <TableCell colSpan={canUpdate || canDelete ? 10 : 9}>
                                         <Typography align="center" color="text.secondary" sx={{ py: 3 }}>
                                             لا توجد عناصر مطابقة
                                         </Typography>
@@ -812,12 +1232,24 @@ export default function Menu() {
                             />
                         </Grid>
                         <Grid item xs={12} md={4}>
-                            <TextField
-                                fullWidth
-                                label="Barcode"
-                                value={form.barcode}
-                                onChange={(e) => setForm((prev) => ({ ...prev, barcode: e.target.value }))}
-                            />
+                            <Stack spacing={1}>
+                                <TextField
+                                    fullWidth
+                                    label="Barcode"
+                                    value={form.barcode}
+                                    helperText="يمكنك إدخال باركود المورد، أو توليد باركود داخلي سهل للطباعة والمسح."
+                                    onChange={(e) => setForm((prev) => ({ ...prev, barcode: e.target.value }))}
+                                />
+                                <Button
+                                    variant="outlined"
+                                    color="secondary"
+                                    startIcon={<AutoFixHighIcon />}
+                                    onClick={requestNextInternalBarcode}
+                                    disabled={barcodeFieldLoading}
+                                >
+                                    {barcodeFieldLoading ? 'جارٍ التوليد...' : 'توليد باركود داخلي سهل'}
+                                </Button>
+                            </Stack>
                         </Grid>
                         <Grid item xs={12} md={4}>
                             <TextField
@@ -992,6 +1424,142 @@ export default function Menu() {
                             </Paper>
                         </Grid>
 
+                        {form.item_type === 'sellable' && (
+                            <Grid item xs={12}>
+                                <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                                    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
+                                        <Box>
+                                            <Typography variant="subtitle1" fontWeight="bold">الخيارات والإضافات</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                استخدم هذا القسم لتعريف `Modifiers` و`Variants` مثل الحجم والإضافات ونوع الخبز.
+                                            </Typography>
+                                        </Box>
+                                        <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addOptionGroup}>
+                                            إضافة مجموعة
+                                        </Button>
+                                    </Stack>
+
+                                    {!Array.isArray(form.option_groups) || form.option_groups.length === 0 ? (
+                                        <Typography variant="body2" color="text.secondary">
+                                            لا توجد مجموعات خيارات لهذا الصنف حاليًا.
+                                        </Typography>
+                                    ) : (
+                                        <Stack spacing={2}>
+                                            {form.option_groups.map((group, groupIndex) => (
+                                                <Paper key={group.id || `group-${groupIndex}`} variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: 'grey.50' }}>
+                                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1 }}>
+                                                        <TextField
+                                                            fullWidth
+                                                            label="اسم المجموعة بالعربية"
+                                                            value={group.name_ar || ''}
+                                                            onChange={(e) => updateOptionGroup(groupIndex, { name_ar: e.target.value })}
+                                                        />
+                                                        <TextField
+                                                            fullWidth
+                                                            label="اسم المجموعة بالإنجليزية"
+                                                            value={group.name_en || ''}
+                                                            onChange={(e) => updateOptionGroup(groupIndex, { name_en: e.target.value })}
+                                                        />
+                                                    </Stack>
+
+                                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1 }}>
+                                                        <TextField
+                                                            fullWidth
+                                                            select
+                                                            label="نوع المجموعة"
+                                                            value={group.group_type || 'modifier'}
+                                                            onChange={(e) => updateOptionGroup(groupIndex, { group_type: e.target.value })}
+                                                        >
+                                                            <MenuItem value="modifier">Modifier / إضافة</MenuItem>
+                                                            <MenuItem value="variant">Variant / متغير</MenuItem>
+                                                        </TextField>
+                                                        <TextField
+                                                            fullWidth
+                                                            select
+                                                            label="طريقة الاختيار"
+                                                            value={group.selection_type || 'single'}
+                                                            onChange={(e) => updateOptionGroup(groupIndex, { selection_type: e.target.value })}
+                                                        >
+                                                            <MenuItem value="single">خيار واحد فقط</MenuItem>
+                                                            <MenuItem value="multiple">أكثر من خيار</MenuItem>
+                                                        </TextField>
+                                                        <FormControlLabel
+                                                            control={(
+                                                                <Checkbox
+                                                                    checked={Boolean(group.required)}
+                                                                    onChange={(e) => updateOptionGroup(groupIndex, { required: e.target.checked })}
+                                                                />
+                                                            )}
+                                                            label="اختيار إجباري"
+                                                        />
+                                                        <Button color="error" variant="outlined" startIcon={<DeleteIcon />} onClick={() => removeOptionGroup(groupIndex)}>
+                                                            حذف المجموعة
+                                                        </Button>
+                                                    </Stack>
+
+                                                    <Stack spacing={1}>
+                                                        {(Array.isArray(group.options) ? group.options : []).map((option, optionIndex) => (
+                                                            <Grid container spacing={1} key={option.id || `option-${groupIndex}-${optionIndex}`}>
+                                                                <Grid item xs={12} md={4}>
+                                                                    <TextField
+                                                                        fullWidth
+                                                                        label="اسم الخيار بالعربية"
+                                                                        value={option.name_ar || ''}
+                                                                        onChange={(e) => updateOptionInGroup(groupIndex, optionIndex, { name_ar: e.target.value })}
+                                                                    />
+                                                                </Grid>
+                                                                <Grid item xs={12} md={3}>
+                                                                    <TextField
+                                                                        fullWidth
+                                                                        label="اسم الخيار بالإنجليزية"
+                                                                        value={option.name_en || ''}
+                                                                        onChange={(e) => updateOptionInGroup(groupIndex, optionIndex, { name_en: e.target.value })}
+                                                                    />
+                                                                </Grid>
+                                                                <Grid item xs={8} md={2}>
+                                                                    <TextField
+                                                                        fullWidth
+                                                                        type="number"
+                                                                        label="فرق السعر"
+                                                                        value={option.price_delta ?? 0}
+                                                                        onChange={(e) => updateOptionInGroup(groupIndex, optionIndex, { price_delta: e.target.value })}
+                                                                    />
+                                                                </Grid>
+                                                                <Grid item xs={3} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                    <FormControlLabel
+                                                                        control={(
+                                                                            <Checkbox
+                                                                                checked={Boolean(option.is_default)}
+                                                                                onChange={(e) => updateOptionInGroup(groupIndex, optionIndex, { is_default: e.target.checked })}
+                                                                            />
+                                                                        )}
+                                                                        label="افتراضي"
+                                                                    />
+                                                                </Grid>
+                                                                <Grid item xs={1} md={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <IconButton
+                                                                        color="error"
+                                                                        onClick={() => removeOptionFromGroup(groupIndex, optionIndex)}
+                                                                        disabled={(group.options || []).length <= 1}
+                                                                    >
+                                                                        <DeleteIcon />
+                                                                    </IconButton>
+                                                                </Grid>
+                                                            </Grid>
+                                                        ))}
+                                                    </Stack>
+
+                                                    <Button size="small" variant="outlined" sx={{ mt: 1 }} startIcon={<AddIcon />} onClick={() => addOptionToGroup(groupIndex)}>
+                                                        إضافة خيار
+                                                    </Button>
+                                                </Paper>
+                                            ))}
+                                        </Stack>
+                                    )}
+                                </Paper>
+                            </Grid>
+                        )}
+
                         {form.image_url && (
                             <Grid item xs={12}>
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -1013,6 +1581,79 @@ export default function Menu() {
                     <Button onClick={() => setDialogOpen(false)} disabled={saving || imageUploading}>إلغاء</Button>
                     <Button variant="contained" onClick={handleSave} disabled={saving || imageUploading}>
                         {saving ? 'جارٍ الحفظ...' : 'حفظ'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={printDialog.open}
+                onClose={() => setPrintDialog({ open: false, title: '', items: [] })}
+                fullWidth
+                maxWidth="sm"
+            >
+                <DialogTitle>{printDialog.title || 'طباعة الباركود'}</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 0.5 }}>
+                        <Alert severity="info">
+                            سيتم طباعة باركود الأصناف التي تحتوي على قيمة `barcode` فقط.
+                        </Alert>
+
+                        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                            <Chip label={`إجمالي الأصناف: ${printDialog.items.length}`} color="primary" variant="outlined" />
+                            <Chip
+                                label={`جاهز للطباعة: ${printDialog.items.filter((item) => String(item.barcode || '').trim()).length}`}
+                                color="success"
+                                variant="outlined"
+                            />
+                        </Stack>
+
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="عدد النسخ لكل صنف"
+                            value={printCopies}
+                            inputProps={{ min: 1, step: 1 }}
+                            onChange={(e) => setPrintCopies(e.target.value)}
+                        />
+
+                        <Paper variant="outlined" sx={{ p: 1.5, maxHeight: 280, overflow: 'auto', borderRadius: 2 }}>
+                            <Stack spacing={1}>
+                                {printDialog.items.map((item) => (
+                                    <Box
+                                        key={item.id}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: 1,
+                                            py: 0.5,
+                                            borderBottom: '1px dashed',
+                                            borderColor: 'divider'
+                                        }}
+                                    >
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <Typography fontWeight={600}>{item.name_ar}</Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {item.sku ? `SKU: ${item.sku}` : 'بدون SKU'}
+                                            </Typography>
+                                        </Box>
+                                        <Chip
+                                            size="small"
+                                            icon={<QrCodeIcon />}
+                                            label={item.barcode || 'بدون باركود'}
+                                            color={item.barcode ? 'info' : 'default'}
+                                            variant="outlined"
+                                        />
+                                    </Box>
+                                ))}
+                            </Stack>
+                        </Paper>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPrintDialog({ open: false, title: '', items: [] })}>إلغاء</Button>
+                    <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrintBarcodes}>
+                        طباعة الآن
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -1086,6 +1727,22 @@ export default function Menu() {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3500}
+                onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    severity={snackbar.severity || 'info'}
+                    variant="filled"
+                    onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Stack>
     )
 }

@@ -33,8 +33,8 @@ export default function Home() {
             {/* Hero Section */}
             <section className="hero">
                 <div className="container">
-                    <h1 style={{ animation: 'fadeIn 0.8s ease-out' }}>مرحباً بك في مطعمنا</h1>
-                    <p style={{ fontSize: '1.25rem', opacity: 0.9, animation: 'slideUp 0.8s ease-out' }}>اكتشف أشهى المأكولات واطلب الآن</p>
+                    <h1 className="hero-title" style={{ animation: 'fadeIn 0.8s ease-out' }}>مرحباً بك في مطعمنا</h1>
+                    <p className="hero-subtitle" style={{ fontSize: '1.25rem', opacity: 0.9, animation: 'slideUp 0.8s ease-out' }}>اكتشف أشهى المأكولات واطلب الآن</p>
                 </div>
             </section>
 
@@ -44,7 +44,7 @@ export default function Home() {
                     <h2 className="section-title">قائمة الطعام</h2>
 
                     {/* Categories */}
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
+                    <div className="category-row" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
                         <button
                             className={`btn ${selectedCategory === 'all' ? 'btn-primary' : 'btn-outline'} btn-sm`}
                             onClick={() => setSelectedCategory('all')}

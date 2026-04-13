@@ -41,6 +41,11 @@ const OrderItem = sequelize.define('OrderItem', {
     },
     notes: {
         type: DataTypes.TEXT
+    },
+    selected_options: {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: []
     }
 }, {
     tableName: 'order_items',

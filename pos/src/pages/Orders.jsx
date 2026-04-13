@@ -276,7 +276,7 @@ export default function Orders() {
             </Box>
 
             <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 3 }}>
-                <Tab label={`نشطة (${orders.filter(o => ['new', 'confirmed', 'preparing', 'ready', 'handed_to_cashier'].includes(o.status)).length})`} />
+                <Tab label={`نشطة (${orders.filter(o => ['pending', 'approved', 'new', 'confirmed', 'preparing', 'ready', 'handed_to_cashier'].includes(o.status)).length})`} />
                 <Tab label={`مكتملة (${orders.filter(o => o.status === 'completed').length})`} />
                 <Tab label={`ملغية (${orders.filter(o => o.status === 'cancelled').length})`} />
             </Tabs>

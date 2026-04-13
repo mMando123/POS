@@ -6,12 +6,13 @@ const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
     },
 })
 
 // Menu API
 export const menuAPI = {
-    getAll: () => api.get('/menu', { params: { available_only: true } }),
+    getAll: () => api.get('/menu', { params: { available_only: true, hide_out_of_stock: true } }),
 }
 
 // Category API

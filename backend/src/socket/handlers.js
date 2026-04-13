@@ -1,4 +1,19 @@
 const jwt = require('jsonwebtoken');
+const logger = require('../services/logger');
+
+const safeInfo = (message) => {
+    try {
+        logger.info(message);
+    } catch (err) {
+        try {
+            if (process.stdout && process.stdout.writable) {
+                process.stdout.write(`${message}\n`);
+            }
+        } catch (_) {
+            // ignore broken pipe / closed stdout
+        }
+    }
+};
 
 function setupSocketHandlers(io) {
     // Authentication middleware for socket
@@ -23,20 +38,20 @@ function setupSocketHandlers(io) {
     });
 
     io.on('connection', (socket) => {
-        console.log(`[socket] client connected: ${socket.id}`);
+        safeInfo(`[socket] client connected: ${socket.id}`);
 
         const joinRoleRooms = (role) => {
             if (!role) return;
             socket.join(role); // legacy alias
             socket.join(`role:${role}`);
-            console.log(`[socket] ${socket.id} joined role rooms for ${role}`);
+            safeInfo(`[socket] ${socket.id} joined role rooms for ${role}`);
         };
 
         // Join branch room (for POS)
         socket.on('join:branch', (branchId) => {
             if (!branchId) return;
             socket.join(`branch:${branchId}`);
-            console.log(`[socket] ${socket.id} joined branch ${branchId}`);
+            safeInfo(`[socket] ${socket.id} joined branch ${branchId}`);
         });
 
         // Join KDS rooms
@@ -44,7 +59,7 @@ function setupSocketHandlers(io) {
             socket.join('kds'); // legacy alias room
             socket.join(`kds:${branchId || 'all'}`);
             socket.join('kds:all');
-            console.log(`[socket] ${socket.id} joined KDS rooms`);
+            safeInfo(`[socket] ${socket.id} joined KDS rooms`);
         });
 
         // Join role-based room for targeted notifications
@@ -56,7 +71,7 @@ function setupSocketHandlers(io) {
         socket.on('join:cashier', () => {
             socket.join('cashier'); // legacy alias room
             joinRoleRooms('cashier');
-            console.log(`[socket] ${socket.id} joined cashier rooms`);
+            safeInfo(`[socket] ${socket.id} joined cashier rooms`);
         });
 
         // Auto-join role room if authenticated
@@ -68,14 +83,14 @@ function setupSocketHandlers(io) {
         const tokenBranchId = socket.user?.branchId || socket.user?.branch_id || null;
         if (tokenBranchId) {
             socket.join(`branch:${tokenBranchId}`);
-            console.log(`[socket] ${socket.id} auto-joined branch ${tokenBranchId}`);
+            safeInfo(`[socket] ${socket.id} auto-joined branch ${tokenBranchId}`);
         }
 
         // Join order room (for customer tracking)
         socket.on('join:order', (orderId) => {
             if (!orderId) return;
             socket.join(`order:${orderId}`);
-            console.log(`[socket] ${socket.id} tracking order ${orderId}`);
+            safeInfo(`[socket] ${socket.id} tracking order ${orderId}`);
         });
 
         // Leave order room
@@ -102,7 +117,7 @@ function setupSocketHandlers(io) {
         });
 
         socket.on('disconnect', () => {
-            console.log(`[socket] client disconnected: ${socket.id}`);
+            safeInfo(`[socket] client disconnected: ${socket.id}`);
         });
     });
 

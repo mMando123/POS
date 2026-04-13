@@ -167,8 +167,8 @@ export default function NotificationCenter() {
         }
     }
 
-    const getIcon = (type) => {
-        switch (type) {
+    const getIcon = (notification) => {
+        switch (notification.type) {
             case 'order_pending':
             case 'order_new':
                 return <DeliveryIcon color="primary" />
@@ -178,6 +178,11 @@ export default function NotificationCenter() {
                 return <WarningIcon color="error" />
             case 'low_stock':
                 return <WarningIcon color="error" />
+            case 'system':
+                if (String(notification.title || '').includes('الصلاحية')) {
+                    return <WarningIcon color="warning" />
+                }
+                return <InfoIcon color="info" />
             default:
                 return <InfoIcon color="info" />
         }
@@ -243,9 +248,9 @@ export default function NotificationCenter() {
                                     bgcolor: notification.is_read ? 'transparent' : 'action.hover',
                                 }}
                             >
-                                <ListItemButton onClick={() => handleNotificationClick(notification)}>
-                                    <ListItemIcon sx={{ minWidth: 40 }}>
-                                        {getIcon(notification.type)}
+                                    <ListItemButton onClick={() => handleNotificationClick(notification)}>
+                                        <ListItemIcon sx={{ minWidth: 40 }}>
+                                        {getIcon(notification)}
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={

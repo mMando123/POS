@@ -25,6 +25,14 @@ const UnitConversionService = require('./unitConversionService')
 const resolveUpdateLock = (transaction) => transaction?.LOCK?.UPDATE || true
 
 const round6 = (value) => Math.round((parseFloat(value || 0) + Number.EPSILON) * 1_000_000) / 1_000_000
+const parseDateOnly = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return null
+    const normalized = raw.includes('T') ? raw.slice(0, 10) : raw
+    const parsed = new Date(`${normalized}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) return null
+    return parsed
+}
 
 const toFiniteNumber = (value, label) => {
     const parsed = parseFloat(value)
@@ -119,6 +127,7 @@ class StockService {
                 source_id: sourceId,
                 reference: options.reference,
                 batch_number: options.batchNumber,
+                production_date: options.productionDate,
                 expiry_date: options.expiryDate,
                 user_id: userId,
                 notes: options.notes
@@ -610,6 +619,66 @@ class StockService {
             minStock: parseFloat(s.min_stock || 0),
             deficit: parseFloat(s.min_stock || 0) - parseFloat(s.quantity || 0)
         }))
+    }
+
+    /**
+     * Get batches that are expired or close to expiry.
+     */
+    static async getExpiryAlerts(warehouseId = null, alertDays = 30) {
+        const safeAlertDays = Number.isFinite(parseInt(alertDays, 10))
+            ? Math.max(0, parseInt(alertDays, 10))
+            : 30
+
+        const where = {
+            movement_type: { [Op.in]: ['IN', 'TRANSFER_IN', 'ADJUST'] },
+            remaining_quantity: { [Op.gt]: 0 },
+            expiry_date: { [Op.not]: null }
+        }
+        if (warehouseId) where.warehouse_id = warehouseId
+
+        const movements = await StockMovement.findAll({
+            where,
+            include: [
+                { model: Menu, attributes: ['id', 'name_ar', 'name_en', 'sku'] },
+                { model: Warehouse, attributes: ['id', 'name_ar', 'branch_id'] }
+            ],
+            order: [['expiry_date', 'ASC'], ['created_at', 'ASC']]
+        })
+
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        const expired = []
+        const expiringSoon = []
+
+        for (const movement of movements) {
+            const expiryDate = parseDateOnly(movement.expiry_date)
+            if (!expiryDate) continue
+
+            const daysRemaining = Math.floor((expiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+            const entry = {
+                movementId: movement.id,
+                menuId: movement.menu_id,
+                productName: movement.Menu?.name_ar || movement.Menu?.name_en || '-',
+                sku: movement.Menu?.sku || '-',
+                warehouseId: movement.warehouse_id,
+                warehouseName: movement.Warehouse?.name_ar || '-',
+                branchId: movement.Warehouse?.branch_id || null,
+                batchNumber: movement.batch_number || null,
+                productionDate: movement.production_date || null,
+                expiryDate: movement.expiry_date || null,
+                quantity: parseFloat(movement.remaining_quantity || 0),
+                daysRemaining
+            }
+
+            if (daysRemaining < 0) {
+                expired.push({ ...entry, status: 'expired' })
+            } else if (daysRemaining <= safeAlertDays) {
+                expiringSoon.push({ ...entry, status: 'expiring_soon' })
+            }
+        }
+
+        return { expired, expiringSoon }
     }
 
     /**

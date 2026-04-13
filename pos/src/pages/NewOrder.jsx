@@ -7,6 +7,7 @@ import {
   TextField,
   InputAdornment,
   Button,
+  Checkbox,
   IconButton,
   useMediaQuery,
   useTheme,
@@ -28,6 +29,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  FormControlLabel,
   MenuItem,
   ToggleButton,
   ToggleButtonGroup,
@@ -63,6 +65,137 @@ import offlineQueue from '../services/offlineQueue';
 import { useThemeConfig } from '../contexts/ThemeContext';
 
 const round2 = (value) => Math.round((parseFloat(value || 0) + Number.EPSILON) * 100) / 100;
+
+const hasOptionGroups = (item) => Array.isArray(item?.option_groups) && item.option_groups.length > 0;
+
+const buildInitialOptionSelections = (item) => {
+  const selectionMap = {};
+
+  (Array.isArray(item?.option_groups) ? item.option_groups : []).forEach((group) => {
+    const groupId = String(group?.id || '').trim();
+    if (!groupId) return;
+
+    const options = Array.isArray(group?.options) ? group.options : [];
+    const hasExplicitDefault = options.some((option) => Boolean(option?.is_default));
+    const defaultIds = options
+      .filter((option, index) => {
+        if (option?.is_default) return true;
+        return Boolean(group?.required) && !hasExplicitDefault && index === 0;
+      })
+      .map((option) => String(option?.id || '').trim())
+      .filter(Boolean);
+
+    if (group?.selection_type === 'multiple') {
+      selectionMap[groupId] = defaultIds;
+    } else {
+      selectionMap[groupId] = defaultIds[0] || '';
+    }
+  });
+
+  return selectionMap;
+};
+
+const normalizeSelectedOptionsForCart = (item, selectionMap) => {
+  const rows = [];
+
+  (Array.isArray(item?.option_groups) ? item.option_groups : []).forEach((group) => {
+    const groupId = String(group?.id || '').trim();
+    if (!groupId) return;
+
+    const options = Array.isArray(group?.options) ? group.options : [];
+    const optionIds = group?.selection_type === 'multiple'
+      ? (Array.isArray(selectionMap?.[groupId]) ? selectionMap[groupId] : [])
+      : [String(selectionMap?.[groupId] || '').trim()].filter(Boolean);
+
+    optionIds
+      .map((optionId) => String(optionId || '').trim())
+      .filter(Boolean)
+      .forEach((optionId) => {
+        const option = options.find((candidate) => String(candidate?.id || '') === optionId);
+        if (!option) return;
+
+        rows.push({
+          group_id: groupId,
+          group_name_ar: group?.name_ar || '',
+          group_type: group?.group_type || 'modifier',
+          option_id: optionId,
+          option_name_ar: option?.name_ar || '',
+          price_delta: round2(option?.price_delta || 0)
+        });
+      });
+  });
+
+  return rows;
+};
+
+const validateOptionSelections = (item, selectionMap) => {
+  const groups = Array.isArray(item?.option_groups) ? item.option_groups : [];
+
+  for (const group of groups) {
+    if (!group?.required) continue;
+
+    const groupId = String(group?.id || '').trim();
+    const selectedIds = group?.selection_type === 'multiple'
+      ? (Array.isArray(selectionMap?.[groupId]) ? selectionMap[groupId] : [])
+      : [String(selectionMap?.[groupId] || '').trim()].filter(Boolean);
+
+    if (!selectedIds.length) {
+      return `يجب اختيار قيمة لمجموعة "${group?.name_ar || 'الخيارات'}"`;
+    }
+  }
+
+  return '';
+};
+
+const buildSelectedOptionsSummary = (selectedOptions) => {
+  if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) return '';
+
+  const byGroup = new Map();
+  selectedOptions.forEach((option) => {
+    const key = String(option?.group_id || '').trim();
+    if (!key) return;
+
+    const current = byGroup.get(key) || {
+      name: option?.group_name_ar || 'خيارات',
+      values: []
+    };
+    if (option?.option_name_ar) {
+      current.values.push(option.option_name_ar);
+    }
+    byGroup.set(key, current);
+  });
+
+  return Array.from(byGroup.values())
+    .filter((group) => group.values.length > 0)
+    .map((group) => `${group.name}: ${group.values.join('، ')}`)
+    .join(' | ');
+};
+
+const calculateSelectedOptionsDelta = (selectedOptions) =>
+  round2((Array.isArray(selectedOptions) ? selectedOptions : []).reduce((sum, option) => {
+    return sum + round2(option?.price_delta || 0);
+  }, 0));
+
+const buildCartKey = (menuId, batchNumber, selectedOptions) => {
+  const normalizedOptions = (Array.isArray(selectedOptions) ? selectedOptions : [])
+    .map((option) => `${option.group_id}:${option.option_id}`)
+    .sort()
+    .join('|');
+
+  const parts = [String(menuId || '').trim()];
+  if (batchNumber) parts.push(String(batchNumber).trim());
+  if (normalizedOptions) parts.push(normalizedOptions);
+  return parts.filter(Boolean).join('::');
+};
+
+const toOrderSelectedOptions = (selectedOptions) => (
+  Array.isArray(selectedOptions)
+    ? selectedOptions.map((option) => ({
+      group_id: option.group_id,
+      option_id: option.option_id
+    }))
+    : []
+);
 
 // --- Components ---
 
@@ -166,26 +299,36 @@ const CartItem = ({ item, onUpdate, onRemove, formatCurrency }) =>
   <Box sx={{ display: 'flex', p: 1.5, mb: 1, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: '0.2s', '&:hover': { borderColor: 'primary.main' }, minWidth: 0, alignItems: { xs: 'flex-start', sm: 'center' }, gap: 1, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
       <Typography variant="subtitle2" fontWeight="bold" noWrap>{item.name_ar}</Typography>
-      <Typography variant="caption" color="text.secondary">{formatCurrency(item.price)} / للوحدة</Typography>
+      <Typography variant="caption" color="text.secondary">{formatCurrency(item.price)} / ??????</Typography>
+      {item.selected_options_summary &&
+        <Typography variant="caption" color="secondary.main" sx={{ display: 'block' }}>
+          {item.selected_options_summary}
+        </Typography>
+      }
       {item.batch_number &&
         <Typography variant="caption" color="info.main" sx={{ display: 'block' }}>
-          رقم التشغيلة: {item.batch_number}
+          ??? ????????: {item.batch_number}
         </Typography>
       }
     </Box>
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, width: { xs: '100%', sm: 'auto' }, justifyContent: { xs: 'space-between', sm: 'flex-end' } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'grey.100', borderRadius: 2 }}>
-        <IconButton size="small" onClick={() => onUpdate(item.menu_id, Math.max(0, item.quantity - 1))} color="error">
+        <IconButton size="small" onClick={() => onUpdate(item.cart_key || item.menu_id, Math.max(0, item.quantity - 1))} color="error">
           <Remove fontSize="small" />
         </IconButton>
         <Typography variant="body2" fontWeight="bold" sx={{ minWidth: 20, textAlign: 'center' }}>{item.quantity}</Typography>
-        <IconButton size="small" onClick={() => onUpdate(item.menu_id, item.quantity + 1)} color="primary">
+        <IconButton size="small" onClick={() => onUpdate(item.cart_key || item.menu_id, item.quantity + 1)} color="primary">
           <Add fontSize="small" />
         </IconButton>
       </Box>
       <Typography variant="subtitle2" fontWeight="bold" sx={{ minWidth: 50, textAlign: 'right' }}>
         {formatCurrency(item.price * item.quantity)}
       </Typography>
+      {onRemove &&
+        <IconButton size="small" color="error" onClick={() => onRemove(item.cart_key || item.menu_id)}>
+          <Delete fontSize="small" />
+        </IconButton>
+      }
     </Box>
   </Box>;
 
@@ -299,7 +442,15 @@ export default function NewOrder() {
     open: false,
     item: null,
     batches: [],
-    selectedBatch: ''
+    selectedBatch: '',
+    pendingOptionSelections: {}
+  });
+  const [optionDialog, setOptionDialog] = useState({
+    open: false,
+    item: null,
+    batchNumber: null,
+    selectionMap: {},
+    error: ''
   });
   const [offlineCount, setOfflineCount] = useState(offlineQueue.count());
   // Order type & delivery
@@ -407,10 +558,26 @@ export default function NewOrder() {
 
   const visibleMenuItems = useMemo(() => {
     if (!selectedWarehouseId) return menuItems;
+
     return menuItems.filter((item) => {
-      if (!item.track_stock) return true;
-      const available = selectedWarehouseAvailableByMenu.get(String(item.id)) || 0;
-      return available > 0;
+      if (item.track_stock) {
+        const available = selectedWarehouseAvailableByMenu.get(String(item.id)) || 0;
+        return available > 0;
+      }
+
+      const recipeLines = Array.isArray(item.recipeIngredients) ? item.recipeIngredients : [];
+      if (recipeLines.length === 0) return true;
+
+      return recipeLines.every((line) => {
+        const ingredientId = String(line.ingredient_menu_id || '');
+        if (!ingredientId) return true;
+
+        const available = selectedWarehouseAvailableByMenu.get(ingredientId) || 0;
+        const requiredPerUnit = parseFloat(line.quantity || 0) || 0;
+        if (!(requiredPerUnit > 0)) return true;
+
+        return available >= requiredPerUnit;
+      });
     });
   }, [menuItems, selectedWarehouseAvailableByMenu, selectedWarehouseId]);
 
@@ -575,7 +742,8 @@ export default function NewOrder() {
           items: cartItems.map((i) => ({
             menu_id: i.menu_id,
             quantity: i.quantity,
-            batch_number: selectedBatches[i.menu_id] || i.batch_number || undefined
+            batch_number: i.batch_number || selectedBatches[i.menu_id] || undefined,
+            selected_options: toOrderSelectedOptions(i.selected_options)
           })),
           coupon_code: couponInfo?.code || undefined,
           customer_phone: customerPhone.trim() || undefined,
@@ -612,6 +780,7 @@ export default function NewOrder() {
       setPricingPreview(null);
       setPricingError('');
       setSelectedBatches({});
+      setOptionDialog({ open: false, item: null, batchNumber: null, selectionMap: {}, error: '' });
     }
   }, [cartItems.length]);
 
@@ -632,21 +801,46 @@ export default function NewOrder() {
 
     setSelectedWarehouseId(normalizedWarehouseId);
     setSelectedBatches({});
-    setBatchDialog({ open: false, item: null, batches: [], selectedBatch: '' });
+    setBatchDialog({ open: false, item: null, batches: [], selectedBatch: '', pendingOptionSelections: {} });
+    setOptionDialog({ open: false, item: null, batchNumber: null, selectionMap: {}, error: '' });
   }, [cartItems.length, isWarehouseLockedForUser]);
 
-  const pushItemToCart = useCallback((item, batchNumber = null) => {
+  const openOptionDialog = useCallback((item, batchNumber = null, initialSelectionMap = null) => {
+    setOptionDialog({
+      open: true,
+      item,
+      batchNumber: batchNumber || null,
+      selectionMap: initialSelectionMap || buildInitialOptionSelections(item),
+      error: ''
+    });
+  }, []);
+
+  const closeOptionDialog = useCallback(() => {
+    setOptionDialog({ open: false, item: null, batchNumber: null, selectionMap: {}, error: '' });
+  }, []);
+
+  const pushItemToCart = useCallback((item, batchNumber = null, selectedOptions = []) => {
+    const normalizedSelectedOptions = Array.isArray(selectedOptions) ? selectedOptions : [];
+    const optionPriceDelta = calculateSelectedOptionsDelta(normalizedSelectedOptions);
+    const cartKey = buildCartKey(item.id, batchNumber, normalizedSelectedOptions);
+
     dispatch(addToCart({
       menu_id: item.id,
+      cart_key: cartKey,
       name_ar: item.name_ar,
-      price: parseFloat(item.price),
+      price: round2(parseFloat(item.price) + optionPriceDelta),
       active_image: item.image_url,
-      batch_number: batchNumber || null
+      batch_number: batchNumber || null,
+      selected_options: normalizedSelectedOptions,
+      selected_options_summary: buildSelectedOptionsSummary(normalizedSelectedOptions),
+      option_price_delta: optionPriceDelta
     }));
     playBeep();
   }, [dispatch, playBeep]);
 
   const handleAddToCart = useCallback(async (item) => {
+    const initialSelectionMap = hasOptionGroups(item) ? buildInitialOptionSelections(item) : {};
+
     if (item.track_stock) {
       const availableInSelectedWarehouse = selectedWarehouseAvailableByMenu.get(String(item.id)) || 0;
       if (selectedWarehouseId && !(availableInSelectedWarehouse > 0)) {
@@ -669,7 +863,8 @@ export default function NewOrder() {
             open: true,
             item,
             batches,
-            selectedBatch: current
+            selectedBatch: current,
+            pendingOptionSelections: initialSelectionMap
           });
           return;
         }
@@ -678,8 +873,15 @@ export default function NewOrder() {
         // Continue normal flow if batch fetch fails
       }
     }
-    pushItemToCart(item, selectedBatches[item.id] || null);
+
+    if (hasOptionGroups(item)) {
+      openOptionDialog(item, selectedBatches[item.id] || null, initialSelectionMap);
+      return;
+    }
+
+    pushItemToCart(item, selectedBatches[item.id] || null, []);
   }, [
+    openOptionDialog,
     pushItemToCart,
     selectedBatches,
     selectedWarehouseAvailableByMenu,
@@ -690,7 +892,7 @@ export default function NewOrder() {
   const handleBatchConfirm = () => {
     const item = batchDialog.item;
     if (!item) {
-      setBatchDialog({ open: false, item: null, batches: [], selectedBatch: '' });
+      setBatchDialog({ open: false, item: null, batches: [], selectedBatch: '', pendingOptionSelections: {} });
       return;
     }
 
@@ -699,9 +901,61 @@ export default function NewOrder() {
       setSelectedBatches((prev) => ({ ...prev, [item.id]: selected }));
     }
 
-    pushItemToCart(item, selected);
-    setBatchDialog({ open: false, item: null, batches: [], selectedBatch: '' });
+    if (hasOptionGroups(item)) {
+      openOptionDialog(item, selected, batchDialog.pendingOptionSelections || buildInitialOptionSelections(item));
+    } else {
+      pushItemToCart(item, selected, []);
+    }
+
+    setBatchDialog({ open: false, item: null, batches: [], selectedBatch: '', pendingOptionSelections: {} });
   };
+
+  const handleOptionSingleChange = useCallback((groupId, optionId) => {
+    setOptionDialog((prev) => ({
+      ...prev,
+      error: '',
+      selectionMap: {
+        ...prev.selectionMap,
+        [groupId]: optionId
+      }
+    }));
+  }, []);
+
+  const handleOptionMultipleChange = useCallback((groupId, optionId, checked) => {
+    setOptionDialog((prev) => {
+      const current = Array.isArray(prev.selectionMap?.[groupId]) ? prev.selectionMap[groupId] : [];
+      const next = checked
+        ? Array.from(new Set([...current, optionId]))
+        : current.filter((value) => value !== optionId);
+
+      return {
+        ...prev,
+        error: '',
+        selectionMap: {
+          ...prev.selectionMap,
+          [groupId]: next
+        }
+      };
+    });
+  }, []);
+
+  const handleOptionConfirm = useCallback(() => {
+    const item = optionDialog.item;
+    if (!item) {
+      closeOptionDialog();
+      return;
+    }
+
+    const validationError = validateOptionSelections(item, optionDialog.selectionMap);
+    if (validationError) {
+      setOptionDialog((prev) => ({ ...prev, error: validationError }));
+      return;
+    }
+
+    const selectedOptions = normalizeSelectedOptionsForCart(item, optionDialog.selectionMap);
+    pushItemToCart(item, optionDialog.batchNumber || null, selectedOptions);
+    closeOptionDialog();
+  }, [closeOptionDialog, optionDialog.batchNumber, optionDialog.item, optionDialog.selectionMap, pushItemToCart]);
 
   const buildClientReference = () => `pos_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -717,7 +971,8 @@ export default function NewOrder() {
       items: cartItems.map((i) => ({
         menu_id: i.menu_id,
         quantity: i.quantity,
-        batch_number: selectedBatches[i.menu_id] || i.batch_number || undefined
+        batch_number: i.batch_number || selectedBatches[i.menu_id] || undefined,
+        selected_options: toOrderSelectedOptions(i.selected_options)
       })),
       client_reference: buildClientReference(),
       ...(couponInfo?.code ? { coupon_code: couponInfo.code } : {}),
@@ -1074,9 +1329,10 @@ export default function NewOrder() {
           ) : (
             cartItems.map((item) => (
               <CartItem
-                key={item.menu_id}
+                key={item.cart_key || item.menu_id}
                 item={item}
-                onUpdate={(id, qty) => dispatch(updateQuantity({ menu_id: id, quantity: qty }))}
+                onUpdate={(id, qty) => dispatch(updateQuantity({ cart_key: id, quantity: qty }))}
+                onRemove={(id) => dispatch(removeFromCart(id))}
                 formatCurrency={formatCurrency}
               />
             ))

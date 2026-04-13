@@ -10,6 +10,7 @@ import {
     DialogContent,
     DialogTitle,
     Divider,
+    Grid,
     IconButton,
     MenuItem,
     Paper,
@@ -52,6 +53,18 @@ const designationDefault = {
     description: ''
 }
 
+const MetricCard = ({ title, value, subtitle, color = '#1976d2' }) => (
+    <Paper sx={{ p: 2.25, borderRadius: 2, borderInlineStart: `4px solid ${color}`, height: '100%' }}>
+        <Typography variant="body2" color="text.secondary">{title}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.75 }}>{value}</Typography>
+        {subtitle && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                {subtitle}
+            </Typography>
+        )}
+    </Paper>
+)
+
 export default function HrDepartments() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -82,6 +95,22 @@ export default function HrDepartments() {
         })
         return map
     }, [employees])
+
+    const departmentInsights = useMemo(() => {
+        const activeDepartments = departments.filter((row) => row.status === 'active').length
+        const departmentsWithManagers = departments.filter((row) => row.manager_id).length
+        const averageBudget = departments.length
+            ? departments.reduce((sum, row) => sum + Number(row.budget || 0), 0) / departments.length
+            : 0
+
+        return {
+            departmentsCount: departments.length,
+            activeDepartments,
+            departmentsWithManagers,
+            designationsCount: designations.length,
+            averageBudget
+        }
+    }, [departments, designations])
 
     const fetchData = useCallback(async () => {
         try {
@@ -212,7 +241,43 @@ export default function HrDepartments() {
                 </Alert>
             )}
 
-            <Paper sx={{ p: 2, mb: 2 }}>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="إجمالي الأقسام"
+                        value={departmentInsights.departmentsCount}
+                        subtitle="الأقسام الظاهرة حسب الفلتر"
+                        color="#1565c0"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="الأقسام النشطة"
+                        value={departmentInsights.activeDepartments}
+                        subtitle={`مدير معيّن: ${departmentInsights.departmentsWithManagers}`}
+                        color="#2e7d32"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="المسميات الوظيفية"
+                        value={departmentInsights.designationsCount}
+                        subtitle="إجمالي المسميات المتاحة"
+                        color="#00838f"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="متوسط الميزانية"
+                        value={departmentInsights.averageBudget.toFixed(2)}
+                        subtitle="متوسط ميزانية الأقسام الحالية"
+                        color="#ef6c00"
+                    />
+                </Grid>
+            </Grid>
+
+            <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>فلاتر الأقسام</Typography>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                     <TextField
                         fullWidth
@@ -234,7 +299,13 @@ export default function HrDepartments() {
                 </Stack>
             </Paper>
 
-            <Paper sx={{ mb: 2, overflowX: 'auto' }}>
+            <Paper sx={{ mb: 2, overflowX: 'auto', borderRadius: 2 }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>سجل الأقسام</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {departmentInsights.departmentsCount} قسم | النشطة {departmentInsights.activeDepartments} | المسميات {departmentInsights.designationsCount}
+                    </Typography>
+                </Box>
                 {loading ? (
                     <Box sx={{ p: 5, display: 'flex', justifyContent: 'center' }}>
                         <CircularProgress />
@@ -284,9 +355,12 @@ export default function HrDepartments() {
                 )}
             </Paper>
 
-            <Paper sx={{ overflowX: 'auto' }}>
+            <Paper sx={{ overflowX: 'auto', borderRadius: 2 }}>
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>المسميات الوظيفية</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {departmentInsights.designationsCount} مسمى وظيفي مرتبط بالهيكل الحالي
+                    </Typography>
                 </Box>
                 <Divider />
                 <Table size="small">
@@ -532,4 +606,3 @@ export default function HrDepartments() {
         </Box>
     )
 }
-

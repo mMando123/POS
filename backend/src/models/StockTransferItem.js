@@ -26,6 +26,10 @@ const StockTransferItem = sequelize.define('StockTransferItem', {
         type: DataTypes.STRING(50),
         allowNull: true
     },
+    production_date: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
+    },
     expiry_date: {
         type: DataTypes.DATEONLY,
         allowNull: true

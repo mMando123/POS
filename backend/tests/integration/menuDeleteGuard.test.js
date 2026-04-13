@@ -8,6 +8,7 @@ jest.mock('../../src/middleware/auth', () => ({
         next()
     },
     requirePermission: () => (req, res, next) => next(),
+    requireAnyPermission: () => (req, res, next) => next(),
     authorize: () => (req, res, next) => next(),
     optionalAuth: (req, res, next) => next(),
     hasPermission: () => true,
@@ -60,6 +61,7 @@ describe('Menu delete guard', () => {
     it('blocks deletion when stock exists', async () => {
         mockMenuFindByPk.mockResolvedValue({
             id: 'item-1',
+            branch_id: 'branch-1',
             destroy: jest.fn()
         })
         mockStockFindAll.mockResolvedValue([
@@ -82,6 +84,7 @@ describe('Menu delete guard', () => {
     it('blocks deletion when item is used as ingredient in other recipes', async () => {
         mockMenuFindByPk.mockResolvedValue({
             id: 'item-1',
+            branch_id: 'branch-1',
             destroy: jest.fn()
         })
         mockStockFindAll.mockResolvedValue([])
@@ -98,6 +101,7 @@ describe('Menu delete guard', () => {
         const destroyItem = jest.fn().mockResolvedValue(true)
         mockMenuFindByPk.mockResolvedValue({
             id: 'item-1',
+            branch_id: 'branch-1',
             destroy: destroyItem
         })
         mockStockFindAll.mockResolvedValue([

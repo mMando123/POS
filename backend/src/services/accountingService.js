@@ -410,6 +410,69 @@ class AccountingService {
 
     // ==================== FINANCIAL EVENT JOURNAL ENTRIES ====================
 
+    static async recordCustomerDeposit(order, { transaction = null } = {}) {
+        if (!order?.id) return null
+
+        const existingEntry = await JournalEntry.findOne({
+            where: { source_type: 'customer_deposit', source_id: order.id },
+            ...(transaction ? { transaction } : {})
+        })
+        if (existingEntry) {
+            logger.info(`📒 recordCustomerDeposit SKIPPED — duplicate guard triggered for order ${order.order_number} (JE already exists: ${existingEntry.entry_number})`)
+            return existingEntry
+        }
+
+        const { OrderPayment } = require('../models')
+        const paymentRows = await OrderPayment.findAll({
+            where: { order_id: order.id },
+            ...(transaction ? { transaction } : {})
+        })
+
+        let depositAmount = 0
+        if (paymentRows.length > 0) {
+            for (const row of paymentRows) {
+                const amount = Math.round(parseFloat(row.amount || 0) * 100) / 100
+                if (amount <= 0) continue
+                if (row.payment_method !== 'cash') {
+                    depositAmount = Math.round((depositAmount + amount) * 100) / 100
+                }
+            }
+        } else if (String(order.payment_method || '').toLowerCase() !== 'cash') {
+            depositAmount = Math.round(parseFloat(order.total || 0) * 100) / 100
+        }
+
+        if (!(depositAmount > 0)) return null
+
+        const ctx = { branchId: order.branch_id }
+        const accts = await AccountResolver.resolveMany({
+            bank: ACCOUNT_KEYS.BANK,
+            customerDeposits: ACCOUNT_KEYS.CUSTOMER_DEPOSITS
+        }, ctx)
+
+        return this.createJournalEntry({
+            description: `دفعة عميل مقدمة لطلب رقم ${order.order_number}`,
+            sourceType: 'customer_deposit',
+            sourceId: order.id,
+            lines: [
+                {
+                    accountCode: accts.bank,
+                    debit: depositAmount,
+                    credit: 0,
+                    description: `Online prepayment received: ${order.order_number}`
+                },
+                {
+                    accountCode: accts.customerDeposits,
+                    debit: 0,
+                    credit: depositAmount,
+                    description: `Customer deposit liability: ${order.order_number}`
+                }
+            ],
+            branchId: order.branch_id,
+            createdBy: order.user_id,
+            transaction
+        })
+    }
+
     /**
      * Record a completed sale
      * 
@@ -461,6 +524,23 @@ class AccountingService {
             else bankAmount = total
         }
 
+        let depositSettlementAmount = 0
+        const existingDepositEntry = await JournalEntry.findOne({
+            where: {
+                source_type: 'customer_deposit',
+                source_id: order.id,
+                status: { [Op.ne]: 'reversed' }
+            },
+            ...(transaction ? { transaction } : {})
+        })
+        if (existingDepositEntry) {
+            const depositPosted = Math.round(parseFloat(existingDepositEntry.total_amount || 0) * 100) / 100
+            if (depositPosted > 0) {
+                depositSettlementAmount = Math.min(depositPosted, bankAmount > 0 ? bankAmount : total)
+                bankAmount = Math.round((bankAmount - depositSettlementAmount) * 100) / 100
+            }
+        }
+
         // Phase 3: Dynamic account resolution (payment-aware)
         // In strict mode, resolve only the payment accounts that are actually needed.
         // This avoids blocking cash-only orders when bank mapping is intentionally unset.
@@ -471,9 +551,18 @@ class AccountingService {
         }
         if (cashAmount > 0) requiredAccounts.cash = ACCOUNT_KEYS.CASH
         if (bankAmount > 0) requiredAccounts.bank = ACCOUNT_KEYS.BANK
+        if (depositSettlementAmount > 0) requiredAccounts.customerDeposits = ACCOUNT_KEYS.CUSTOMER_DEPOSITS
         const accts = await AccountResolver.resolveMany(requiredAccounts, ctx)
 
         const lines = []
+        if (depositSettlementAmount > 0) {
+            lines.push({
+                accountCode: accts.customerDeposits,
+                debit: depositSettlementAmount,
+                credit: 0,
+                description: `Settle customer deposit: ${order.order_number}`
+            })
+        }
         if (cashAmount > 0) {
             lines.push({
                 accountCode: accts.cash,
@@ -924,16 +1013,46 @@ class AccountingService {
 
         const refundAmount = parseFloat(refund.total_amount || refund.refund_amount)
         const paymentMethod = order.payment_method || 'cash'
+        const existingRevenueEntry = await JournalEntry.findOne({
+            where: { source_type: 'order', source_id: order.id },
+            ...(transaction ? { transaction } : {})
+        })
+        const existingDepositEntry = await JournalEntry.findOne({
+            where: {
+                source_type: 'customer_deposit',
+                source_id: order.id,
+                status: { [Op.ne]: 'reversed' }
+            },
+            ...(transaction ? { transaction } : {})
+        })
 
         // Phase 3: Dynamic account resolution
         const ctx = { branchId: order.branch_id }
-        const accts = await AccountResolver.resolveMany({
+        const requiredAccounts = {
             cash: ACCOUNT_KEYS.CASH,
             bank: ACCOUNT_KEYS.BANK,
             refundLosses: ACCOUNT_KEYS.REFUND_LOSSES,
-        }, ctx)
+        }
+        if (!existingRevenueEntry && existingDepositEntry) {
+            requiredAccounts.customerDeposits = ACCOUNT_KEYS.CUSTOMER_DEPOSITS
+        }
+        const accts = await AccountResolver.resolveMany(requiredAccounts, ctx)
 
         const paymentAccount = paymentMethod === 'cash' ? accts.cash : accts.bank
+
+        if (!existingRevenueEntry && existingDepositEntry) {
+            return this.createJournalEntry({
+                description: `رد دفعة عميل مقدمة — استرداد رقم ${refund.refund_number || refund.id}`,
+                sourceType: 'refund',
+                sourceId: refund.id,
+                lines: [
+                    { accountCode: accts.customerDeposits, debit: refundAmount, credit: 0, description: 'Reverse customer deposit liability' },
+                    { accountCode: paymentAccount, debit: 0, credit: refundAmount, description: 'Refund customer prepayment' }
+                ],
+                branchId: order.branch_id,
+                transaction
+            })
+        }
 
         return this.createJournalEntry({
             description: `مرتجعات — استرداد رقم ${refund.refund_number || refund.id}`,

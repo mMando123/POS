@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useDispatch } from 'react-redux'
 import Header from './components/Header'
 import CartDrawer from './components/CartDrawer'
+import MobileCartBar from './components/MobileCartBar'
 import Home from './pages/Home'
 import Checkout from './pages/Checkout'
 import PaymentCallback from './pages/PaymentCallback'
@@ -11,7 +12,7 @@ import { menuAPI, categoryAPI } from './services/api'
 import { setMenuItems, setCategories } from './store/slices/menuSlice'
 import socketService from './services/socket'
 
-import { Toaster, toast } from 'react-hot-toast'
+import { toast } from 'react-hot-toast'
 
 function App() {
     const dispatch = useDispatch()
@@ -50,7 +51,9 @@ function App() {
         })
 
         // Fetch public settings
-        fetch('/api/settings/public')
+        fetch('/api/settings/public', {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        })
             .then(res => res.json())
             .then(res => {
                 const data = res.data
@@ -81,9 +84,9 @@ function App() {
     return (
         <BrowserRouter>
             <div className="app">
-                <Toaster />
                 <Header />
                 <CartDrawer />
+                <MobileCartBar />
                 <main>
                     <Routes>
                         <Route path="/" element={<Home />} />

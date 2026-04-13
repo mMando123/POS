@@ -3,7 +3,7 @@ const router = express.Router()
 const { Op } = require('sequelize')
 const { body } = require('express-validator')
 const { validate } = require('../middleware/validate')
-const { authenticate, requirePermission, PERMISSIONS } = require('../middleware/auth')
+const { authenticate, optionalAuth, requirePermission, PERMISSIONS } = require('../middleware/auth')
 const { Category, Branch } = require('../models')
 
 const emitCategoryUpdate = (req, branchId, payload) => {
@@ -13,19 +13,7 @@ const emitCategoryUpdate = (req, branchId, payload) => {
     io.to(`branch:${branchId}`).emit('category:updated', payload)
 }
 
-const resolveCategoryBranchId = async (req, requestedBranchId) => {
-    if (req.user.role !== 'admin') {
-        return req.user.branchId || null
-    }
-
-    if (requestedBranchId) {
-        return requestedBranchId
-    }
-
-    if (req.user.branchId) {
-        return req.user.branchId
-    }
-
+const getDefaultActiveBranchId = async () => {
     const fallbackBranch = await Branch.findOne({
         where: { is_active: true },
         attributes: ['id'],
@@ -33,6 +21,32 @@ const resolveCategoryBranchId = async (req, requestedBranchId) => {
     })
 
     return fallbackBranch?.id || null
+}
+
+const resolveCategoryBranchId = async (req, requestedBranchId) => {
+    if (req.user?.branchId) {
+        return req.user.branchId
+    }
+
+    if (req.user?.role === 'admin' && requestedBranchId) {
+        return requestedBranchId
+    }
+
+    return getDefaultActiveBranchId()
+}
+
+const resolveReadableCategoryBranchId = async (req, requestedBranchId) => {
+    const explicitBranchId = String(requestedBranchId || '').trim() || null
+
+    if (req.user?.branchId) {
+        return req.user.branchId
+    }
+
+    if (req.user?.role === 'admin') {
+        return explicitBranchId || null
+    }
+
+    return explicitBranchId || await getDefaultActiveBranchId()
 }
 
 const ensureBranchExists = async (branchId) => {
@@ -47,13 +61,18 @@ const ensureBranchExists = async (branchId) => {
 }
 
 // Get all categories
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
     try {
-        const { active_only } = req.query
+        const { active_only, branch_id } = req.query
 
         const where = {}
         if (active_only === 'true') {
             where.is_active = true
+        }
+
+        const scopedBranchId = await resolveReadableCategoryBranchId(req, branch_id)
+        if (scopedBranchId) {
+            where.branch_id = scopedBranchId
         }
 
         const categories = await Category.findAll({
@@ -148,14 +167,8 @@ router.put(
     async (req, res) => {
         try {
             const { id } = req.params
-
-            if (req.user.role !== 'admin' && !req.user.branchId) {
-                return res.status(403).json({ message: 'لا يوجد فرع مرتبط بالمستخدم' })
-            }
-
-            const where = req.user.role === 'admin'
-                ? { id }
-                : { id, branch_id: req.user.branchId }
+            const scopedBranchId = await resolveReadableCategoryBranchId(req, req.body.branch_id)
+            const where = scopedBranchId ? { id, branch_id: scopedBranchId } : { id }
 
             const category = await Category.findOne({ where })
             if (!category) {
@@ -169,7 +182,7 @@ router.put(
             if (req.body.is_active !== undefined) updates.is_active = Boolean(req.body.is_active)
 
             if (req.body.branch_id !== undefined) {
-                if (req.user.role !== 'admin') {
+                if (req.user.branchId) {
                     return res.status(403).json({ message: 'غير مسموح بتغيير الفرع' })
                 }
                 const branchExists = await ensureBranchExists(req.body.branch_id)
@@ -225,14 +238,8 @@ router.put(
 router.delete('/:id', authenticate, requirePermission(PERMISSIONS.CATEGORY_MANAGE), async (req, res) => {
     try {
         const { id } = req.params
-
-        if (req.user.role !== 'admin' && !req.user.branchId) {
-            return res.status(403).json({ message: 'لا يوجد فرع مرتبط بالمستخدم' })
-        }
-
-        const where = req.user.role === 'admin'
-            ? { id }
-            : { id, branch_id: req.user.branchId }
+        const scopedBranchId = await resolveReadableCategoryBranchId(req, req.query.branch_id)
+        const where = scopedBranchId ? { id, branch_id: scopedBranchId } : { id }
 
         const category = await Category.findOne({ where })
         if (!category) {

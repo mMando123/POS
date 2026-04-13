@@ -34,26 +34,26 @@ const SETTINGS_FILE = path.join(__dirname, '../../data/settings.json')
 // Default settings
 const defaultSettings = {
     store: {
-        storeName: 'Ù…Ø·Ø¹Ù… Ø§Ù„Ø°ÙˆØ§Ù‚Ø©',
+        storeName: 'مطعم الذواقة',
         storeNameEn: 'Gourmet Restaurant',
         phone: '0500000000',
-        address: 'Ø§Ù„Ø±ÙŠØ§Ø¶ØŒ Ø§Ù„Ù…Ù…Ù„ÙƒØ© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ø§Ù„Ø³Ø¹ÙˆØ¯ÙŠØ©',
+        address: 'الرياض، المملكة العربية السعودية',
         taxNumber: '300000000000003',
         taxRate: 15,
-        serviceRate: 0, // Ø±Ø³ÙˆÙ… Ø®Ø¯Ù…Ø©
+        serviceRate: 0, // رسوم خدمة
         logo: null,
-        commercialRegister: '', // Ø§Ù„Ø³Ø¬Ù„ Ø§Ù„ØªØ¬Ø§Ø±ÙŠ
+        commercialRegister: '', // السجل التجاري
     },
     hardware: {
         printers: [], // { id, name, type: 'network'|'usb', address, location: 'cashier'|'kitchen' }
-        printDirectly: true, // Ø·Ø¨Ø§Ø¹Ø© Ù…Ø¨Ø§Ø´Ø±Ø© Ø¨Ø¯ÙˆÙ† Ù…Ø¹Ø§ÙŠÙ†Ø©
+        printDirectly: true, // طباعة مباشرة بدون معاينة
         enableCashDrawer: true,
         enableKitchenDisplay: false, // KDS
     },
     workflow: {
-        autoAcceptOnline: false, // Ù‚Ø¨ÙˆÙ„ ØªÙ„Ù‚Ø§Ø¦ÙŠ Ù„Ù„Ø·Ù„Ø¨Ø§Øª
-        allowCancelWithoutReason: false, // Ø§Ù„Ø³Ù…Ø§Ø­ Ø¨Ø§Ù„Ø¥Ù„ØºØ§Ø¡ Ø¨Ø¯ÙˆÙ† Ø³Ø¨Ø¨
-        requireManagerForVoid: true, // Ø·Ù„Ø¨ Ù…ÙˆØ§ÙÙ‚Ø© Ø§Ù„Ù…Ø¯ÙŠØ± Ù„Ù„Ø­Ø°Ù
+        autoAcceptOnline: false, // قبول تلقائي للطلبات
+        allowCancelWithoutReason: false, // السماح بالإلغاء بدون سبب
+        requireManagerForVoid: true, // طلب موافقة المدير للحذف
         orderNumberPrefix: 'ORD-',
         orderNumberStart: 1000,
         // --- أوضاع التشغيل ---
@@ -67,7 +67,7 @@ const defaultSettings = {
         showLogo: true,
         showTaxNumber: true,
         showQRCode: true,
-        footerText: 'Ø´ÙƒØ±Ø§Ù‹ Ù„Ø²ÙŠØ§Ø±ØªÙƒÙ…',
+        footerText: 'شكرًا لزيارتكم',
         autoPrint: true,
         paperWidth: 80,
         showCustomerInfo: true,
@@ -83,10 +83,18 @@ const defaultSettings = {
         // Optional map: ingredient_menu_id -> density in kg/L
         densityKgPerLiter: {},
     },
+    hr: {
+        payrollLatePolicy: {
+            enabled: false,
+            graceCount: 0,
+            deductionType: 'fixed_amount',
+            deductionValue: 0
+        }
+    },
     system: {
         language: 'ar',
         currency: 'SAR',
-        currencySymbol: 'Ø±.Ø³',
+        currencySymbol: 'ر.س',
         timezone: 'Asia/Riyadh',
         dateFormat: 'DD/MM/YYYY',
         themeMode: 'light', // dark, light
@@ -100,6 +108,14 @@ const mergeWithDefaults = (stored = {}) => ({
     receipt: { ...defaultSettings.receipt, ...(stored.receipt || {}) },
     notifications: { ...defaultSettings.notifications, ...(stored.notifications || {}) },
     inventory: { ...defaultSettings.inventory, ...(stored.inventory || {}) },
+    hr: {
+        ...defaultSettings.hr,
+        ...(stored.hr || {}),
+        payrollLatePolicy: {
+            ...defaultSettings.hr.payrollLatePolicy,
+            ...((stored.hr && stored.hr.payrollLatePolicy) || {})
+        }
+    },
     system: { ...defaultSettings.system, ...(stored.system || {}) },
 })
 
@@ -139,7 +155,7 @@ router.get('/', authenticate, async (req, res) => {
         res.json({ data: settings })
     } catch (error) {
         console.error('Get settings error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+        res.status(500).json({ message: 'خطأ في جلب الإعدادات' })
     }
 })
 
@@ -173,25 +189,31 @@ router.get('/public', async (req, res) => {
         })
     } catch (error) {
         console.error('Get public settings error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+        res.status(500).json({ message: 'خطأ في جلب الإعدادات' })
     }
 })
 
 // Update all settings (Admin only)
 router.put('/', authenticate, authorize('admin'), [
-    body('store.storeName').optional().isLength({ max: 100 }).withMessage('Ø§Ø³Ù… Ø§Ù„Ù…ØªØ¬Ø± ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 100 Ø­Ø±Ù').trim(),
-    body('store.storeNameEn').optional().isLength({ max: 100 }).withMessage('Ø§Ø³Ù… Ø§Ù„Ù…ØªØ¬Ø± Ø¨Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠØ© ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 100 Ø­Ø±Ù').trim(),
-    body('store.phone').optional().matches(/^[\d\s\-\+\(\)]*$/).withMessage('ØµÙŠØºØ© Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ØºÙŠØ± ØµØ§Ù„Ø­Ø©'),
-    body('store.address').optional().isLength({ max: 500 }).withMessage('Ø§Ù„Ø¹Ù†ÙˆØ§Ù† ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 500 Ø­Ø±Ù').trim(),
-    body('store.taxNumber').optional().isLength({ max: 50 }).withMessage('Ø§Ù„Ø±Ù‚Ù… Ø§Ù„Ø¶Ø±ÙŠØ¨ÙŠ ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 50 Ø­Ø±Ù'),
-    body('store.taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('Ù†Ø³Ø¨Ø© Ø§Ù„Ø¶Ø±ÙŠØ¨Ø© ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† Ø¨ÙŠÙ† 0 Ùˆ 100'),
-    body('store.serviceRate').optional().isFloat({ min: 0, max: 100 }).withMessage('Ù†Ø³Ø¨Ø© Ø§Ù„Ø®Ø¯Ù…Ø© ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† Ø¨ÙŠÙ† 0 Ùˆ 100'),
-    body('receipt.footerText').optional().isLength({ max: 500 }).withMessage('Ù†Øµ Ø§Ù„ÙÙˆØªØ± ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 500 Ø­Ø±Ù').trim(),
-    body('receipt.headerText').optional().isLength({ max: 500 }).withMessage('Ù†Øµ Ø§Ù„Ù‡ÙŠØ¯Ø± ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 500 Ø­Ø±Ù').trim(),
-    body('system.language').optional().isIn(['ar', 'en']).withMessage('Ø§Ù„Ù„ØºØ© ØºÙŠØ± ØµØ§Ù„Ø­Ø©'),
+    body('store.storeName').optional().isLength({ max: 100 }).withMessage('اسم المتجر يجب ألا يتجاوز 100 حرف').trim(),
+    body('store.storeNameEn').optional().isLength({ max: 100 }).withMessage('اسم المتجر بالإنجليزية يجب ألا يتجاوز 100 حرف').trim(),
+    body('store.phone').optional().matches(/^[\d\s\-\+\(\)]*$/).withMessage('صيغة رقم الهاتف غير صالحة'),
+    body('store.address').optional().isLength({ max: 500 }).withMessage('العنوان يجب ألا يتجاوز 500 حرف').trim(),
+    body('store.taxNumber').optional().isLength({ max: 50 }).withMessage('الرقم الضريبي يجب ألا يتجاوز 50 حرف'),
+    body('store.taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('نسبة الضريبة يجب أن تكون بين 0 و100'),
+    body('store.serviceRate').optional().isFloat({ min: 0, max: 100 }).withMessage('نسبة الخدمة يجب أن تكون بين 0 و100'),
+    body('receipt.footerText').optional().isLength({ max: 500 }).withMessage('نص التذييل يجب ألا يتجاوز 500 حرف').trim(),
+    body('receipt.headerText').optional().isLength({ max: 500 }).withMessage('نص الترويسة يجب ألا يتجاوز 500 حرف').trim(),
+    body('hr').optional().isObject().withMessage('إعدادات الموارد البشرية غير صالحة'),
+    body('hr.payrollLatePolicy').optional().isObject().withMessage('سياسة التأخير غير صالحة'),
+    body('hr.payrollLatePolicy.enabled').optional().isBoolean().withMessage('قيمة تفعيل سياسة التأخير غير صالحة'),
+    body('hr.payrollLatePolicy.graceCount').optional().isInt({ min: 0, max: 31 }).withMessage('عدد مرات السماح بالتأخير غير صالح'),
+    body('hr.payrollLatePolicy.deductionType').optional().isIn(['fixed_amount', 'fraction_of_day']).withMessage('نوع خصم التأخير غير صالح'),
+    body('hr.payrollLatePolicy.deductionValue').optional().isFloat({ min: 0, max: 1000000 }).withMessage('قيمة خصم التأخير غير صالحة'),
+    body('system.language').optional().isIn(['ar', 'en']).withMessage('اللغة غير صالحة'),
     body('inventory').optional().isObject().withMessage('إعدادات المخزون غير صالحة'),
     body('inventory.densityKgPerLiter').optional().isObject().withMessage('خريطة الكثافة غير صالحة'),
-    body('system.currency').optional().isLength({ max: 10 }).withMessage('Ø±Ù…Ø² Ø§Ù„Ø¹Ù…Ù„Ø© ØºÙŠØ± ØµØ§Ù„Ø­'),
+    body('system.currency').optional().isLength({ max: 10 }).withMessage('رمز العملة غير صالح'),
     validate
 ], async (req, res) => {
     try {
@@ -205,6 +227,14 @@ router.put('/', authenticate, authorize('admin'), [
             receipt: { ...currentSettings.receipt, ...(req.body.receipt || {}) },
             notifications: { ...currentSettings.notifications, ...(req.body.notifications || {}) },
             inventory: { ...currentSettings.inventory, ...(req.body.inventory || {}) },
+            hr: {
+                ...currentSettings.hr,
+                ...(req.body.hr || {}),
+                payrollLatePolicy: {
+                    ...(currentSettings.hr?.payrollLatePolicy || {}),
+                    ...((req.body.hr && req.body.hr.payrollLatePolicy) || {})
+                }
+            },
             system: { ...currentSettings.system, ...(req.body.system || {}) },
         }
 
@@ -218,15 +248,15 @@ router.put('/', authenticate, authorize('admin'), [
             req.app.get('io').emit('settings:updated', newSettings)
 
             res.json({
-                message: 'ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø¨Ù†Ø¬Ø§Ø­',
+                message: 'تم حفظ الإعدادات بنجاح',
                 data: newSettings
             })
         } else {
-            res.status(500).json({ message: 'ÙØ´Ù„ Ø­ÙØ¸ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+            res.status(500).json({ message: 'فشل حفظ الإعدادات' })
         }
     } catch (error) {
         console.error('Update settings error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+        res.status(500).json({ message: 'خطأ في تحديث الإعدادات' })
     }
 })
 
@@ -241,15 +271,15 @@ router.patch('/store', authenticate, authorize('admin'), async (req, res) => {
             req.app.get('io').emit('settings:updated', currentSettings)
 
             res.json({
-                message: 'ØªÙ… Ø­ÙØ¸ Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ù…ØªØ¬Ø±',
+                message: 'تم حفظ إعدادات المتجر',
                 data: currentSettings.store
             })
         } else {
-            res.status(500).json({ message: 'ÙØ´Ù„ Ø­ÙØ¸ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+            res.status(500).json({ message: 'فشل حفظ الإعدادات' })
         }
     } catch (error) {
         console.error('Update store settings error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ ØªØ­Ø¯ÙŠØ« Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ù…ØªØ¬Ø±' })
+        res.status(500).json({ message: 'خطأ في تحديث إعدادات المتجر' })
     }
 })
 
@@ -264,15 +294,15 @@ router.patch('/receipt', authenticate, authorize('admin'), async (req, res) => {
             req.app.get('io').emit('settings:updated', currentSettings)
 
             res.json({
-                message: 'ØªÙ… Ø­ÙØ¸ Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„ÙØ§ØªÙˆØ±Ø©',
+                message: 'تم حفظ إعدادات الفاتورة',
                 data: currentSettings.receipt
             })
         } else {
-            res.status(500).json({ message: 'ÙØ´Ù„ Ø­ÙØ¸ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+            res.status(500).json({ message: 'فشل حفظ الإعدادات' })
         }
     } catch (error) {
         console.error('Update receipt settings error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ ØªØ­Ø¯ÙŠØ« Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„ÙØ§ØªÙˆØ±Ø©' })
+        res.status(500).json({ message: 'خطأ في تحديث إعدادات الفاتورة' })
     }
 })
 
@@ -281,15 +311,15 @@ router.post('/reset', authenticate, authorize('admin'), async (req, res) => {
     try {
         if (saveSettings(defaultSettings)) {
             res.json({
-                message: 'ØªÙ… Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ù„Ù„Ù‚ÙŠÙ… Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠØ©',
+                message: 'تمت إعادة الإعدادات للقيم الافتراضية',
                 data: defaultSettings
             })
         } else {
-            res.status(500).json({ message: 'ÙØ´Ù„ Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+            res.status(500).json({ message: 'فشل إعادة الإعدادات' })
         }
     } catch (error) {
         console.error('Reset settings error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' })
+        res.status(500).json({ message: 'خطأ في إعادة الإعدادات' })
     }
 })
 

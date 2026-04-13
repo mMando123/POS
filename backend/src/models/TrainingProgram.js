@@ -35,6 +35,10 @@ const TrainingProgram = sequelize.define('TrainingProgram', {
         type: DataTypes.UUID,
         allowNull: true
     },
+    branch_id: {
+        type: DataTypes.UUID,
+        allowNull: true
+    },
     budget: {
         type: DataTypes.DECIMAL(12, 2),
         allowNull: false,
@@ -54,6 +58,7 @@ const TrainingProgram = sequelize.define('TrainingProgram', {
     timestamps: true,
     underscored: true,
     indexes: [
+        { fields: ['branch_id'], name: 'training_programs_branch_idx' },
         { fields: ['status'], name: 'training_programs_status_idx' },
         { fields: ['start_date'], name: 'training_programs_start_date_idx' }
     ]

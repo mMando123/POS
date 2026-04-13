@@ -5,6 +5,7 @@ import {
     Button,
     Chip,
     CircularProgress,
+    Grid,
     MenuItem,
     Paper,
     Stack,
@@ -26,6 +27,11 @@ const statusOptions = [
 ]
 
 const statusLabel = Object.fromEntries(statusOptions.map((item) => [item.value, item.label]))
+const statusChipColor = {
+    draft: 'default',
+    completed: 'warning',
+    reviewed: 'success'
+}
 
 const defaultForm = () => ({
     employee_id: '',
@@ -38,6 +44,18 @@ const defaultForm = () => ({
     goals_for_next_period: '',
     status: 'draft'
 })
+
+const MetricCard = ({ title, value, subtitle, color = '#1976d2' }) => (
+    <Paper sx={{ p: 2.25, borderRadius: 2, borderInlineStart: `4px solid ${color}`, height: '100%' }}>
+        <Typography variant="body2" color="text.secondary">{title}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.75 }}>{value}</Typography>
+        {subtitle && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                {subtitle}
+            </Typography>
+        )}
+    </Paper>
+)
 
 export default function HrPerformance() {
     const [loading, setLoading] = useState(true)
@@ -60,6 +78,27 @@ export default function HrPerformance() {
         })
         return values
     }, [summaryRows])
+
+    const selectedFormEmployee = useMemo(
+        () => employees.find((employee) => employee.id === form.employee_id) || null,
+        [employees, form.employee_id]
+    )
+
+    const performanceInsights = useMemo(() => {
+        const ratedRows = rows.filter((row) => row.overall_rating !== null && row.overall_rating !== undefined && row.overall_rating !== '')
+        const averageRating = ratedRows.length
+            ? ratedRows.reduce((sum, row) => sum + Number(row.overall_rating || 0), 0) / ratedRows.length
+            : 0
+        const latestReview = rows[0] || null
+        const reviewedCount = rows.filter((row) => row.status === 'reviewed').length
+
+        return {
+            totalReviews: rows.length,
+            averageRating,
+            reviewedCount,
+            latestReview
+        }
+    }, [rows])
 
     const fetchData = useCallback(async () => {
         try {
@@ -136,120 +175,216 @@ export default function HrPerformance() {
                 </Alert>
             )}
 
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                        select
-                        fullWidth
-                        label="الموظف"
-                        value={employeeFilter}
-                        onChange={(e) => setEmployeeFilter(e.target.value)}
-                    >
-                        <MenuItem value="">الكل</MenuItem>
-                        {employees.map((employee) => (
-                            <MenuItem key={employee.id} value={employee.id}>
-                                {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        select
-                        label="الحالة"
-                        sx={{ minWidth: 180 }}
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <MenuItem value="">الكل</MenuItem>
-                        {statusOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                    </TextField>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="إجمالي التقييمات"
+                        value={performanceInsights.totalReviews}
+                        subtitle={employeeFilter ? 'وفق الفلاتر الحالية' : 'كل السجلات المعروضة'}
+                        color="#1565c0"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="متوسط التقييم"
+                        value={performanceInsights.averageRating.toFixed(2)}
+                        subtitle="من 5 درجات"
+                        color="#00838f"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="تقييمات مراجعة"
+                        value={performanceInsights.reviewedCount}
+                        subtitle={`مراجعة نهائية: ${summary.reviewed}`}
+                        color="#2e7d32"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="تقييمات بانتظار الإغلاق"
+                        value={summary.draft + summary.completed}
+                        subtitle={`مسودات: ${summary.draft} | مكتملة: ${summary.completed}`}
+                        color="#ef6c00"
+                    />
+                </Grid>
+            </Grid>
+
+            <Paper sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>فلاتر التقييمات</Typography>
+                <Grid container spacing={1.5}>
+                    <Grid item xs={12} md={8}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الموظف"
+                            value={employeeFilter}
+                            onChange={(e) => setEmployeeFilter(e.target.value)}
+                        >
+                            <MenuItem value="">الكل</MenuItem>
+                            {employees.map((employee) => (
+                                <MenuItem key={employee.id} value={employee.id}>
+                                    {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الحالة"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                            <MenuItem value="">الكل</MenuItem>
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                </Grid>
+            </Paper>
+
+            <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.25 }}>ملخص الحالات</Typography>
+                <Stack direction="row" spacing={1.2} flexWrap="wrap" useFlexGap>
+                    <Chip label={`مسودة: ${summary.draft}`} />
+                    <Chip color="warning" label={`مكتمل: ${summary.completed}`} />
+                    <Chip color="success" label={`مراجع: ${summary.reviewed}`} />
                 </Stack>
             </Paper>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2} sx={{ mb: 2 }}>
-                <Chip label={`مسودة: ${summary.draft}`} />
-                <Chip color="warning" label={`مكتمل: ${summary.completed}`} />
-                <Chip color="success" label={`مراجع: ${summary.reviewed}`} />
-            </Stack>
-
-            <Paper sx={{ p: 2, mb: 2 }}>
-                <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>إنشاء تقييم جديد</Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                    <TextField
-                        select
-                        fullWidth
-                        label="الموظف"
-                        value={form.employee_id}
-                        onChange={(e) => setForm((prev) => ({ ...prev, employee_id: e.target.value }))}
-                    >
-                        {employees.map((employee) => (
-                            <MenuItem key={employee.id} value={employee.id}>
-                                {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        label="من"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={form.review_period_start}
-                        onChange={(e) => setForm((prev) => ({ ...prev, review_period_start: e.target.value }))}
-                    />
-                    <TextField
-                        label="إلى"
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                        value={form.review_period_end}
-                        onChange={(e) => setForm((prev) => ({ ...prev, review_period_end: e.target.value }))}
-                    />
-                    <TextField
-                        label="التقييم (0-5)"
-                        type="number"
-                        inputProps={{ min: 0, max: 5, step: 0.1 }}
-                        sx={{ minWidth: 140 }}
-                        value={form.overall_rating}
-                        onChange={(e) => setForm((prev) => ({ ...prev, overall_rating: e.target.value }))}
-                    />
-                </Stack>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 1.5 }}>
-                    <TextField
-                        fullWidth
-                        label="تعليقات"
-                        value={form.comments}
-                        onChange={(e) => setForm((prev) => ({ ...prev, comments: e.target.value }))}
-                    />
-                    <TextField
-                        fullWidth
-                        label="نقاط القوة"
-                        value={form.strengths}
-                        onChange={(e) => setForm((prev) => ({ ...prev, strengths: e.target.value }))}
-                    />
-                    <TextField
-                        fullWidth
-                        label="التحسين المطلوب"
-                        value={form.areas_for_improvement}
-                        onChange={(e) => setForm((prev) => ({ ...prev, areas_for_improvement: e.target.value }))}
-                    />
-                </Stack>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 1.5 }}>
-                    <TextField
-                        fullWidth
-                        label="أهداف الفترة القادمة"
-                        value={form.goals_for_next_period}
-                        onChange={(e) => setForm((prev) => ({ ...prev, goals_for_next_period: e.target.value }))}
-                    />
-                    <Button
-                        variant="contained"
-                        onClick={createReview}
-                        disabled={saving || !form.employee_id}
-                    >
-                        حفظ التقييم
-                    </Button>
-                </Stack>
+            <Paper sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ mb: 1.25, fontWeight: 700 }}>إنشاء تقييم جديد</Typography>
+                {selectedFormEmployee && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.75 }}>
+                        {selectedFormEmployee.employee_code} | {selectedFormEmployee.department?.name_ar || 'بدون قسم'} | {selectedFormEmployee.designation?.title_ar || 'بدون مسمى'}
+                    </Typography>
+                )}
+                <Grid container spacing={1.5}>
+                    <Grid item xs={12} md={4}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الموظف"
+                            value={form.employee_id}
+                            onChange={(e) => setForm((prev) => ({ ...prev, employee_id: e.target.value }))}
+                        >
+                            {employees.map((employee) => (
+                                <MenuItem key={employee.id} value={employee.id}>
+                                    {employee.employee_code} - {employee.first_name_ar} {employee.last_name_ar}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="من"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={form.review_period_start}
+                            onChange={(e) => setForm((prev) => ({ ...prev, review_period_start: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="إلى"
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                            value={form.review_period_end}
+                            onChange={(e) => setForm((prev) => ({ ...prev, review_period_end: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            fullWidth
+                            label="التقييم (0-5)"
+                            type="number"
+                            inputProps={{ min: 0, max: 5, step: 0.1 }}
+                            value={form.overall_rating}
+                            onChange={(e) => setForm((prev) => ({ ...prev, overall_rating: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <TextField
+                            select
+                            fullWidth
+                            label="الحالة"
+                            value={form.status}
+                            onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                        >
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                        <TextField
+                            fullWidth
+                            label="تعليقات"
+                            value={form.comments}
+                            onChange={(e) => setForm((prev) => ({ ...prev, comments: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                        <TextField
+                            fullWidth
+                            label="نقاط القوة"
+                            value={form.strengths}
+                            onChange={(e) => setForm((prev) => ({ ...prev, strengths: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                        <TextField
+                            fullWidth
+                            label="التحسين المطلوب"
+                            value={form.areas_for_improvement}
+                            onChange={(e) => setForm((prev) => ({ ...prev, areas_for_improvement: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={10}>
+                        <TextField
+                            fullWidth
+                            label="أهداف الفترة القادمة"
+                            value={form.goals_for_next_period}
+                            onChange={(e) => setForm((prev) => ({ ...prev, goals_for_next_period: e.target.value }))}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                        <Button
+                            fullWidth
+                            sx={{ height: '100%', minHeight: 56 }}
+                            variant="contained"
+                            onClick={createReview}
+                            disabled={saving || !form.employee_id}
+                        >
+                            حفظ التقييم
+                        </Button>
+                    </Grid>
+                </Grid>
             </Paper>
 
-            <Paper sx={{ overflowX: 'auto' }}>
+            <Paper sx={{ overflowX: 'auto', borderRadius: 2 }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.25}>
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>سجل تقييمات الأداء</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {performanceInsights.totalReviews} تقييم
+                            </Typography>
+                        </Box>
+                        {performanceInsights.latestReview && (
+                            <Chip
+                                color={statusChipColor[performanceInsights.latestReview.status] || 'default'}
+                                variant="outlined"
+                                label={`آخر تقييم: ${performanceInsights.latestReview.employee?.employee_code || '-'} - ${statusLabel[performanceInsights.latestReview.status] || performanceInsights.latestReview.status}`}
+                            />
+                        )}
+                    </Stack>
+                </Box>
                 {loading ? (
                     <Box sx={{ p: 5, display: 'flex', justifyContent: 'center' }}>
                         <CircularProgress />
@@ -281,7 +416,7 @@ export default function HrPerformance() {
                                     </TableCell>
                                     <TableCell>{row.overall_rating ?? '-'}</TableCell>
                                     <TableCell>
-                                        <Chip size="small" label={statusLabel[row.status] || row.status} />
+                                        <Chip size="small" color={statusChipColor[row.status] || 'default'} label={statusLabel[row.status] || row.status} />
                                     </TableCell>
                                     <TableCell>{row.comments || '-'}</TableCell>
                                     <TableCell align="center">
@@ -305,4 +440,3 @@ export default function HrPerformance() {
         </Box>
     )
 }
-

@@ -43,6 +43,47 @@ const orderTypeLabels = {
     delivery: '🚗 توصيل',
 }
 
+const paymentMethodLabels = {
+    cash: 'نقدي',
+    card: 'بطاقة',
+    online: 'أونلاين',
+    multi: 'متعدد'
+}
+
+const getPaymentMeta = (order) => {
+    const paymentMethod = String(order?.payment_method || '').toLowerCase()
+    const paymentStatus = String(order?.payment_status || '').toLowerCase()
+
+    if (paymentStatus === 'paid') {
+        if (paymentMethod === 'online') {
+            return { label: 'مدفوع أونلاين', color: 'success', variant: 'filled' }
+        }
+
+        if (paymentMethod === 'card') {
+            return { label: 'مدفوع بالبطاقة', color: 'success', variant: 'filled' }
+        }
+
+        return { label: 'تم الدفع', color: 'success', variant: 'filled' }
+    }
+
+    if (paymentMethod === 'cash') {
+        return { label: 'دفع عند الاستلام', color: 'warning', variant: 'outlined' }
+    }
+
+    if (paymentStatus === 'failed') {
+        return { label: 'فشل الدفع', color: 'error', variant: 'outlined' }
+    }
+
+    return { label: 'بانتظار تأكيد الدفع', color: 'info', variant: 'outlined' }
+}
+
+const canApproveOrder = (order) => {
+    const paymentMethod = String(order?.payment_method || '').toLowerCase()
+    const paymentStatus = String(order?.payment_status || '').toLowerCase()
+
+    return paymentMethod === 'cash' || paymentStatus === 'paid'
+}
+
 export default function PendingOrders() {
     const [orders, setOrders] = useState([])
     const [loading, setLoading] = useState(true)
@@ -89,8 +130,9 @@ export default function PendingOrders() {
             let nextOrders = response.data.data || []
 
             if (rules.autoAcceptOnline && nextOrders.length > 0) {
+                const approvableOrders = nextOrders.filter(canApproveOrder)
                 let acceptedCount = 0
-                for (const order of nextOrders) {
+                for (const order of approvableOrders) {
                     try {
                         await orderAPI.approve(order.id)
                         acceptedCount += 1
@@ -122,9 +164,15 @@ export default function PendingOrders() {
 
     const handleApprove = async (orderId) => {
         try {
+            const targetOrder = orders.find(order => order.id === orderId) || selectedOrder
+            if (!canApproveOrder(targetOrder)) {
+                toast.error('لا يمكن قبول الطلب قبل تأكيد الدفع الإلكتروني')
+                return
+            }
+
             setProcessing(prev => ({ ...prev, [orderId]: true }))
-            await orderAPI.approve(orderId)
-            toast.success('تم قبول الطلب وإرساله للمطبخ!', { icon: '✅' })
+            const response = await orderAPI.approve(orderId)
+            toast.success(response.data?.message || 'تم قبول الطلب بنجاح', { icon: '✅' })
             refreshAll()
         } catch (error) {
             console.error('Error approving order:', error)
@@ -257,12 +305,19 @@ export default function PendingOrders() {
                                         <Typography variant="h5" fontWeight="bold">
                                             #{order.order_number}
                                         </Typography>
-                                        <Chip
-                                            size="small"
-                                            label={orderTypeLabels[order.order_type]}
-                                            color="primary"
-                                            sx={{ mt: 0.5 }}
-                                        />
+                                        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
+                                            <Chip
+                                                size="small"
+                                                label={orderTypeLabels[order.order_type]}
+                                                color="primary"
+                                            />
+                                            <Chip
+                                                size="small"
+                                                label={getPaymentMeta(order).label}
+                                                color={getPaymentMeta(order).color}
+                                                variant={getPaymentMeta(order).variant}
+                                            />
+                                        </Box>
                                     </Box>
                                     <Chip
                                         label="في الانتظار"
@@ -300,6 +355,10 @@ export default function PendingOrders() {
                                     {order.items?.length || 0} عناصر
                                 </Typography>
 
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                    طريقة الدفع: {paymentMethodLabels[order.payment_method] || order.payment_method || 'غير محدد'}
+                                </Typography>
+
                                 <Divider sx={{ my: 1 }} />
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="subtitle1" fontWeight="bold">الإجمالي</Typography>
@@ -328,7 +387,7 @@ export default function PendingOrders() {
                                         size="small"
                                         startIcon={processing[order.id] ? <CircularProgress size={16} /> : <ApproveIcon />}
                                         onClick={(e) => { e.stopPropagation(); handleApprove(order.id) }}
-                                        disabled={processing[order.id]}
+                                        disabled={processing[order.id] || !canApproveOrder(order)}
                                         sx={{ flex: 1 }}
                                     >
                                         قبول
@@ -377,6 +436,18 @@ export default function PendingOrders() {
                                     </Box>
                                 </Box>
                             )}
+
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+                                <Chip
+                                    label={getPaymentMeta(selectedOrder).label}
+                                    color={getPaymentMeta(selectedOrder).color}
+                                    variant={getPaymentMeta(selectedOrder).variant}
+                                />
+                                <Chip
+                                    label={`طريقة الدفع: ${paymentMethodLabels[selectedOrder.payment_method] || selectedOrder.payment_method || 'غير محدد'}`}
+                                    variant="outlined"
+                                />
+                            </Box>
 
                             <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                                 المحتويات
@@ -436,7 +507,7 @@ export default function PendingOrders() {
                             color="success"
                             startIcon={<ApproveIcon />}
                             onClick={() => { handleApprove(selectedOrder?.id); setDetailsOpen(false) }}
-                            disabled={processing[selectedOrder?.id]}
+                            disabled={processing[selectedOrder?.id] || !canApproveOrder(selectedOrder)}
                         >
                             قبول وإرسال للمطبخ
                         </Button>

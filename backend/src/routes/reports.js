@@ -4,6 +4,7 @@ const { Op, fn, col, literal } = require('sequelize')
 const { Order, OrderItem, OrderPayment, Menu, Refund, AuditLog, sequelize } = require('../models')
 const { authenticate, requirePermission, PERMISSIONS } = require('../middleware/auth')
 const { AccountResolver, ACCOUNT_KEYS } = require('../services/accountResolver')
+const OrderPaymentService = require('../services/orderPaymentService')
 
 // Daily sales report - requires REPORTS_VIEW permission
 router.get('/daily', authenticate, requirePermission(PERMISSIONS.REPORTS_VIEW), async (req, res) => {
@@ -27,37 +28,27 @@ router.get('/daily', authenticate, requirePermission(PERMISSIONS.REPORTS_VIEW), 
             include: [{ model: OrderItem, as: 'items' }]
         })
 
-        // Calculate statistics
-        const completedOrders = orders.filter(o => o.status !== 'cancelled')
+        // Financial sales report should reflect recognized/paid orders only.
+        const completedOrders = orders.filter(o =>
+            o.status !== 'cancelled'
+            && ['paid', 'refunded', 'partially_refunded'].includes(String(o.payment_status || '').toLowerCase())
+        )
         const cancelledOrders = orders.filter(o => o.status === 'cancelled')
 
         const totalSales = Math.round(completedOrders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0) * 100) / 100
         const totalTax = Math.round(completedOrders.reduce((sum, o) => sum + parseFloat(o.tax || 0), 0) * 100) / 100
-        const completedOrderIds = completedOrders.map(o => o.id)
-        let cashSales = 0
-        let cardSales = 0
-        let onlineSales = 0
-
-        if (completedOrderIds.length > 0) {
-            const paymentRows = await OrderPayment.findAll({
-                where: { order_id: { [Op.in]: completedOrderIds } },
-                attributes: [
-                    'payment_method',
-                    [fn('SUM', col('amount')), 'amount']
-                ],
-                group: ['payment_method']
-            })
-
-            paymentRows.forEach((row) => {
-                const amount = Math.round(parseFloat(row.get('amount') || 0) * 100) / 100
-                if (row.payment_method === 'cash') cashSales = amount
-                else if (row.payment_method === 'card') cardSales = amount
-                else if (row.payment_method === 'online') onlineSales = amount
-            })
-        } else {
-            cashSales = Math.round(completedOrders.filter(o => o.payment_method === 'cash').reduce((sum, o) => sum + parseFloat(o.total || 0), 0) * 100) / 100
-            cardSales = Math.round(completedOrders.filter(o => ['card', 'multi'].includes(o.payment_method)).reduce((sum, o) => sum + parseFloat(o.total || 0), 0) * 100) / 100
-        }
+        const paymentTotals = await OrderPaymentService.calculateTotalsForOrders(completedOrders)
+        const receiptTotals = await OrderPaymentService.getDateRangeTotals({
+            startDate: startOfDay,
+            endDate: endOfDay
+        })
+        const cashSales = Math.round(parseFloat(paymentTotals.cash || 0) * 100) / 100
+        const cardSales = Math.round(parseFloat(paymentTotals.card || 0) * 100) / 100
+        const onlineSales = Math.round(parseFloat(paymentTotals.online || 0) * 100) / 100
+        const cashReceipts = Math.round(parseFloat(receiptTotals.cash || 0) * 100) / 100
+        const cardReceipts = Math.round(parseFloat(receiptTotals.card || 0) * 100) / 100
+        const onlineReceipts = Math.round(parseFloat(receiptTotals.online || 0) * 100) / 100
+        const totalReceipts = Math.round((cashReceipts + cardReceipts + onlineReceipts) * 100) / 100
         const cancelledAmount = Math.round(cancelledOrders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0) * 100) / 100
 
         // Get refunds for the day (CRITICAL: Net Revenue = Gross - Refunds)
@@ -111,6 +102,10 @@ router.get('/daily', authenticate, requirePermission(PERMISSIONS.REPORTS_VIEW), 
                     cardSales: cardSales.toFixed(2),
                     onlineSales: onlineSales.toFixed(2),
                     nonCashSales: (cardSales + onlineSales).toFixed(2),
+                    cashReceipts: cashReceipts.toFixed(2),
+                    cardReceipts: cardReceipts.toFixed(2),
+                    onlineReceipts: onlineReceipts.toFixed(2),
+                    totalReceipts: totalReceipts.toFixed(2),
                     cancelledAmount: cancelledAmount.toFixed(2),
                     // Refunds (CRITICAL for accurate financials)
                     refundCount: refundCount,
@@ -167,17 +162,10 @@ router.get('/reconciliation/daily', authenticate, requirePermission(PERMISSIONS.
         let posCard = 0
         let posOnline = 0
         if (orderIds.length) {
-            const rows = await OrderPayment.findAll({
-                where: { order_id: { [Op.in]: orderIds } },
-                attributes: ['payment_method', [fn('SUM', col('amount')), 'amount']],
-                group: ['payment_method']
-            })
-            rows.forEach((row) => {
-                const amount = Number(row.get('amount') || 0)
-                if (row.payment_method === 'cash') posCash = amount
-                else if (row.payment_method === 'card') posCard = amount
-                else if (row.payment_method === 'online') posOnline = amount
-            })
+            const totals = await OrderPaymentService.calculateTotalsForOrders(orders)
+            posCash = Number(totals.cash || 0)
+            posCard = Number(totals.card || 0)
+            posOnline = Number(totals.online || 0)
         }
 
         const posGross = Number(orders.reduce((sum, o) => sum + Number(o.total || 0), 0).toFixed(2))
@@ -185,16 +173,26 @@ router.get('/reconciliation/daily', authenticate, requirePermission(PERMISSIONS.
 
         const auditWhere = {
             category: 'order',
-            action: 'payment_confirmed_webhook',
+            action: { [Op.in]: ['payment_confirmed_webhook', 'payment_confirmed_callback'] },
             timestamp: { [Op.between]: [start, end] }
         }
         if (branchId) auditWhere.branch_id = branchId
 
         const gatewayAuditRows = await AuditLog.findAll({
             where: auditWhere,
-            attributes: ['metadata']
+            attributes: ['entity_id', 'metadata', 'action', 'timestamp']
         })
+
+        const seenGatewayConfirmations = new Set()
         const gatewayTotal = Number(gatewayAuditRows.reduce((sum, row) => {
+            const confirmationKey =
+                String(row.entity_id || '').trim()
+                || String(row.metadata?.transactionId || '').trim()
+                || `${row.action}:${row.timestamp}`
+
+            if (seenGatewayConfirmations.has(confirmationKey)) return sum
+            seenGatewayConfirmations.add(confirmationKey)
+
             const metadata = row.metadata || {}
             const fromCents = metadata.amountCents ? Number(metadata.amountCents) / 100 : 0
             const fromTotal = metadata.order_total ? Number(metadata.order_total) : 0
@@ -223,7 +221,7 @@ router.get('/reconciliation/daily', authenticate, requirePermission(PERMISSIONS.
             JOIN gl_journal_lines jl ON jl.journal_entry_id = je.id
             JOIN gl_accounts a ON a.id = jl.account_id
             WHERE je.status = 'posted'
-              AND je.source_type = 'order'
+              AND je.source_type IN ('order', 'customer_deposit')
               AND je.entry_date = :targetDate
               AND (a.code = :bankCode OR a.code = :bankRootCode OR a.code LIKE :bankFamilyPattern)
               ${branchFilter}
@@ -248,7 +246,7 @@ router.get('/reconciliation/daily', authenticate, requirePermission(PERMISSIONS.
                 },
                 gateway: {
                     webhook_confirmed_total: gatewayTotal.toFixed(2),
-                    confirmations_count: gatewayAuditRows.length
+                    confirmations_count: seenGatewayConfirmations.size
                 },
                 gl: {
                     bank_debit_from_order_entries: glBankDebit.toFixed(2)

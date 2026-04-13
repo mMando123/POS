@@ -172,10 +172,9 @@ async function run() {
             }
         }
 
-        // Finalize order (complete)
-        const idem = `qa-del-${Date.now()}`
-        const fin = await safe(() => api('post', `/orders/${dOrd.id}/complete`, { payment_method: 'cash' }, { 'X-Idempotency-Key': idem }))
-        if (!fin._err) {
+        // Delivery completion now finalizes the order as well
+        const fin = complete
+        if (!complete._err) {
             const dbFin = await db().sequelize.query(
                 `SELECT status, payment_status, completed_at FROM orders WHERE id = :id`,
                 { replacements: { id: dOrd.id }, type: db().sequelize.QueryTypes.SELECT }

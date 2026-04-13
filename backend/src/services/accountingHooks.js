@@ -45,6 +45,38 @@ class AccountingHooks {
     }
 
     /**
+     * Call after a non-cash online payment is confirmed, before revenue recognition.
+     * Records a customer deposit so accounting hears the payment immediately.
+     */
+    static async onOnlinePaymentConfirmed(order, { transaction = null } = {}) {
+        const paymentMethod = String(order?.payment_method || '').toLowerCase()
+        const eligible = order?.order_type === 'online'
+            && order?.payment_status === 'paid'
+            && ['online', 'card', 'multi'].includes(paymentMethod)
+
+        if (!eligible) return null
+
+        if (transaction) {
+            const entry = await AccountingService.recordCustomerDeposit(order, { transaction })
+            if (entry) {
+                logger.info(`Accounting: Customer deposit recorded (atomic) for order ${order.order_number}`)
+            }
+            return entry
+        }
+
+        try {
+            const entry = await AccountingService.recordCustomerDeposit(order)
+            if (entry) {
+                logger.info(`Accounting: Customer deposit recorded for order ${order.order_number}`)
+            }
+            return entry
+        } catch (error) {
+            logger.error(`Customer deposit hook FAILED for order ${order?.id}:`, error.message)
+            return null
+        }
+    }
+
+    /**
      * Call after a refund is approved.
      * Creates refund entry and optional COGS reversal.
      */

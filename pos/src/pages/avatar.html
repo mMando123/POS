@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Animated Registration Form</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* إعدادات الصفحة والخلفية البنفسجية */
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background-color: #8784d9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Poppins', sans-serif;
+            overflow: hidden;
+        }
+
+        /* الحاوية الرئيسية */
+        .main-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 60px;
+            width: 100%;
+            max-width: 900px;
+            padding: 20px;
+        }
+
+        /* === برمجة الشخصية المحسنة (SVG) وحركتها === */
+        .character-wrapper {
+            width: 280px;
+            height: 400px;
+            /* حركة دخول الشخصية من اليسار */
+            animation: walkIn 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            transform: translateX(-150vw);
+        }
+
+        @keyframes walkIn {
+            0% {
+                transform: translateX(-150vw) rotate(-5deg);
+            }
+
+            50% {
+                transform: translateX(20px) rotate(2deg);
+            }
+
+            100% {
+                transform: translateX(0) rotate(0deg);
+            }
+        }
+
+        /* حركة تنفس/تمايل سلسة للشخصية بعد الدخول */
+        .character-svg {
+            width: 100%;
+            height: 100%;
+            animation: breathe 3s infinite alternate ease-in-out;
+            animation-delay: 1.5s;
+            filter: drop-shadow(0px 15px 20px rgba(0, 0, 0, 0.15));
+        }
+
+        @keyframes breathe {
+            0% {
+                transform: translateY(0);
+            }
+
+            100% {
+                transform: translateY(-12px);
+            }
+        }
+
+        /* === برمجة نموذج التسجيل الأنيق === */
+        .form-container {
+            background-color: #ffffff;
+            padding: 45px 40px;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            width: 360px;
+            opacity: 0;
+            /* حركة ظهور النموذج من الأسفل للأعلى */
+            transform: translateY(80px);
+            animation: formPopUp 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            animation-delay: 1s;
+        }
+
+        @keyframes formPopUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* تنسيق نصوص النموذج */
+        .form-container h2 {
+            margin: 0 0 8px 0;
+            color: #2d3748;
+            font-size: 26px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .form-container p {
+            margin: 0 0 35px 0;
+            color: #718096;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        /* تنسيق حقول الإدخال */
+        .input-group {
+            margin-bottom: 22px;
+            position: relative;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4a5568;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: 'Poppins', sans-serif;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            background-color: #f7fafc;
+            color: #2d3748;
+        }
+
+        .input-group input::placeholder {
+            color: #a0aec0;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #6c63ff;
+            background-color: #fff;
+            box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.15);
+        }
+
+        /* تنسيق زر المتابعة */
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #6c63ff;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
+        }
+
+        .submit-btn:hover {
+            background-color: #574bdf;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* تجاوب الشاشة (للموبايل) */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .character-wrapper {
+                height: 250px;
+                animation: dropDown 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            }
+
+            @keyframes dropDown {
+                0% {
+                    transform: translateY(-150vh);
+                }
+
+                100% {
+                    transform: translateY(0);
+                }
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main-container">
+
+        <div class="character-wrapper">
+            <svg class="character-svg" viewBox="0 0 200 400" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="shirtGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#ffca28" />
+                        <stop offset="100%" stop-color="#f57c00" />
+                    </linearGradient>
+                    <linearGradient id="pantsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#64b5f6" />
+                        <stop offset="100%" stop-color="#1976d2" />
+                    </linearGradient>
+                    <linearGradient id="skinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#faccb5" />
+                        <stop offset="100%" stop-color="#dca57a" />
+                    </linearGradient>
+                </defs>
+
+                <ellipse cx="100" cy="380" rx="70" ry="12" fill="rgba(0,0,0,0.2)" filter="blur(2px)" />
+
+                <path d="M100,230 L115,340" stroke="#1565c0" stroke-width="26" stroke-linecap="round" />
+                <path d="M100,350 L135,350" stroke="#d5d5d5" stroke-width="20" stroke-linecap="round" />
+                <path d="M80,230 L60,340" stroke="url(#pantsGrad)" stroke-width="28" stroke-linecap="round" />
+                <path d="M45,350 L80,350" stroke="#ffffff" stroke-width="24" stroke-linecap="round" />
+                <path d="M120,140 Q145,180 135,220" stroke="url(#skinGrad)" stroke-width="16" stroke-linecap="round"
+                    fill="none" />
+
+                <path d="M65,130 Q100,100 135,130 L125,240 Q100,255 70,240 Z" fill="url(#shirtGrad)" />
+                <path d="M65,130 Q100,100 135,130 Q100,140 65,130 Z" fill="#fff" opacity="0.2" />
+                <rect x="90" y="100" width="18" height="25" fill="#dca57a" rx="5" />
+
+                <circle cx="99" cy="75" r="38" fill="url(#skinGrad)" />
+
+                <circle cx="85" cy="70" r="4" fill="#3e2723" />
+                <path d="M75,85 Q85,95 95,85" stroke="#3e2723" stroke-width="2.5" fill="none" stroke-linecap="round" />
+                <path d="M60,65 Q50,25 100,25 Q145,25 138,70 Q125,35 95,35 Q75,35 60,65 Z" fill="#3e2723" />
+                <circle cx="135" cy="65" r="8" fill="#3e2723" />
+                <path d="M85,135 L70,200" stroke="url(#shirtGrad)" stroke-width="22" stroke-linecap="round" />
+                <path d="M70,195 L65,230" stroke="url(#skinGrad)" stroke-width="16" stroke-linecap="round" />
+            </svg>
+        </div>
+
+        <div class="form-container">
+            <h2>Register now</h2>
+            <p>Secure your account by completing the registration</p>
+
+            <div class="input-group">
+                <label>What's your name?</label>
+                <input type="text" placeholder="Mahmoud Mohamed">
+            </div>
+
+            <div class="input-group">
+                <label>Enter your email address</label>
+                <input type="email" placeholder="mahmoud@example.com">
+            </div>
+
+            <button class="submit-btn">Next</button>
+        </div>
+
+    </div>
+
+</body>
+
+</html>

@@ -177,6 +177,8 @@ PerformanceReview.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee
 // Employee -> Training
 Employee.hasMany(TrainingProgram, { foreignKey: 'trainer', as: 'trainingProgramsLed' })
 TrainingProgram.belongsTo(Employee, { foreignKey: 'trainer', as: 'trainerEmployee' })
+Branch.hasMany(TrainingProgram, { foreignKey: 'branch_id', as: 'trainingPrograms' })
+TrainingProgram.belongsTo(Branch, { foreignKey: 'branch_id', as: 'branch' })
 
 // User audit relations in HR
 User.hasMany(Employee, { foreignKey: 'created_by', as: 'hrEmployeesCreated' })
@@ -937,8 +939,39 @@ const ensurePreSyncSchemaCompatibility = async () => {
         type: DataTypes.STRING(50),
         allowNull: true
     })
+    await ensureColumn('order_items', 'selected_options', {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: []
+    })
+    await ensureColumn('menu', 'option_groups', {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: []
+    })
     await ensureColumn('branches', 'company_id', {
         type: DataTypes.UUID,
+        allowNull: true
+    })
+    await ensureColumn('employees', 'base_salary', {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: false,
+        defaultValue: 0
+    })
+    await ensureColumn('stock_movements', 'production_date', {
+        type: DataTypes.DATEONLY,
+        allowNull: true
+    })
+    await ensureColumn('purchase_receipt_items', 'production_date', {
+        type: DataTypes.DATEONLY,
+        allowNull: true
+    })
+    await ensureColumn('purchase_order_items', 'production_date', {
+        type: DataTypes.DATEONLY,
+        allowNull: true
+    })
+    await ensureColumn('stock_transfer_items', 'production_date', {
+        type: DataTypes.DATEONLY,
         allowNull: true
     })
 
@@ -1264,6 +1297,7 @@ const ensurePreSyncSchemaCompatibility = async () => {
         { tableName: 'performance_reviews', fkColumn: 'employee_id', referencedTable: 'employees' },
         { tableName: 'performance_reviews', fkColumn: 'reviewer_id', referencedTable: 'users' },
         { tableName: 'performance_reviews', fkColumn: 'created_by', referencedTable: 'users' },
+        { tableName: 'training_programs', fkColumn: 'branch_id', referencedTable: 'branches' },
         { tableName: 'training_programs', fkColumn: 'trainer', referencedTable: 'employees' },
         { tableName: 'training_programs', fkColumn: 'created_by', referencedTable: 'users' }
     ]
@@ -1382,7 +1416,41 @@ const initDatabase = async (options = {}) => {
 
         // Ensure HR and Delivery tables have new fields synced
         await Employee.sync({ alter: true })
+        await TrainingProgram.sync({ alter: true })
         await DeliveryPersonnel.sync({ alter: true })
+
+        await sequelize.query(`
+            UPDATE employees e
+            SET e.base_salary = (
+                SELECT s.base_salary
+                FROM employee_salaries s
+                WHERE s.employee_id = e.id
+                  AND s.base_salary > 0
+                  AND s.status IN ('approved', 'paid')
+                ORDER BY s.salary_period DESC, s.created_at DESC
+                LIMIT 1
+            )
+            WHERE (e.base_salary IS NULL OR e.base_salary = 0)
+              AND EXISTS (
+                  SELECT 1
+                  FROM employee_salaries s
+                  WHERE s.employee_id = e.id
+                    AND s.base_salary > 0
+                    AND s.status IN ('approved', 'paid')
+              )
+        `).catch((error) => {
+            console.warn('Could not backfill employees.base_salary:', error.message)
+        })
+
+        await sequelize.query(`
+            UPDATE training_programs tp
+            INNER JOIN employees e ON e.id = tp.trainer
+            SET tp.branch_id = e.branch_id
+            WHERE tp.branch_id IS NULL
+              AND e.branch_id IS NOT NULL
+        `).catch((error) => {
+            console.warn('Could not backfill training_programs.branch_id:', error.message)
+        })
 
         const [branch] = await Branch.findOrCreate({
             where: { name_ar: 'الفرع الرئيسي' },

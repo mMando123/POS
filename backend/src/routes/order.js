@@ -28,8 +28,10 @@ const { createOrderValidator, updateOrderStatusValidator } = require('../validat
 const PricingService = require('../services/pricingService')
 const OrderPaymentService = require('../services/orderPaymentService')
 const OrderFinalizationService = require('../services/orderFinalizationService')
+const MenuAvailabilityService = require('../services/menuAvailabilityService')
 const AuditService = require('../services/auditService')
 const logger = require('../services/logger')
+const { getPrintService } = require('../services/printService')
 const { loadSettings } = require('./settings')
 
 const router = express.Router()
@@ -75,6 +77,39 @@ const validTransitions = {
     handed_to_cashier: ['cancelled'],
     completed: [],
     cancelled: []
+}
+
+const getKitchenRoutingConfig = (settings = null) => {
+    const resolved = settings || loadSettings()
+    return {
+        kdsEnabled: resolved?.hardware?.enableKitchenDisplay === true,
+        printKitchenReceipt: resolved?.workflow?.printKitchenReceipt !== false
+    }
+}
+
+const emitToKdsRooms = (io, event, payload, kitchenConfig = null) => {
+    const config = kitchenConfig || getKitchenRoutingConfig()
+    if (!io || !config.kdsEnabled) return false
+
+    io.to('kds:all').emit(event, payload)
+    io.to('kds').emit(event, payload)
+    return true
+}
+
+const maybePrintOnlineKitchenTicket = async (req, order, kitchenConfig = null) => {
+    const config = kitchenConfig || getKitchenRoutingConfig()
+    if (!order || order.order_type !== 'online' || order.status !== 'approved') return false
+    if (config.kdsEnabled || !config.printKitchenReceipt) return false
+
+    try {
+        const printService = req.app.get('printService') || getPrintService()
+        if (!printService?.onOrderApproved) return false
+        await printService.onOrderApproved(order)
+        return true
+    } catch (error) {
+        logger.warn(`Paper kitchen print failed for order ${order.order_number}: ${error.message}`)
+        return false
+    }
 }
 
 const hasBranchAccess = (req, branchId) => {
@@ -284,6 +319,14 @@ router.get('/stock-batches/:menuId', optionalAuth, async (req, res) => {
 // KDS active orders
 router.get('/kds/active', authenticate, requirePermission(PERMISSIONS.KDS_VIEW), async (req, res) => {
     try {
+        const kitchenConfig = getKitchenRoutingConfig()
+        if (!kitchenConfig.kdsEnabled) {
+            return res.json({
+                data: [],
+                meta: { kdsEnabled: false }
+            })
+        }
+
         const rows = await Order.findAll({
             where: {
                 status: { [Op.in]: ['approved', 'new', 'confirmed', 'preparing', 'ready'] }
@@ -291,7 +334,10 @@ router.get('/kds/active', authenticate, requirePermission(PERMISSIONS.KDS_VIEW),
             include: [{ model: OrderItem, as: 'items' }],
             order: [['created_at', 'ASC']]
         })
-        res.json({ data: rows })
+        res.json({
+            data: rows,
+            meta: { kdsEnabled: true }
+        })
     } catch (error) {
         logger.error('Get KDS active orders error:', error)
         res.status(500).json({ message: 'خطأ في الخادم' })
@@ -337,8 +383,7 @@ router.get('/admin/pending', authenticate, authorize('admin', 'manager', 'cashie
     try {
         const where = {
             status: 'pending',
-            order_type: 'online',
-            [Op.or]: [{ payment_method: 'cash' }, { payment_status: 'paid' }]
+            order_type: 'online'
         }
 
         if (req.user?.role !== 'admin' && req.user?.branchId) {
@@ -479,6 +524,21 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
         }
 
         const normalizedClientRef = String(client_reference || '').trim() || null
+        const assignedWarehouseId = req.user?.role === 'cashier'
+            ? (String(req.user?.defaultWarehouseId || '').trim() || null)
+            : null
+        const requestedWarehouseId = String(req.body?.warehouse_id || '').trim() || null
+
+        if (assignedWarehouseId && requestedWarehouseId && requestedWarehouseId !== assignedWarehouseId) {
+            await t.rollback()
+            return res.status(403).json({
+                message: 'غير مصرح لك باستخدام مخزن غير المخزن المعيّن لك',
+                code: 'WAREHOUSE_ACCESS_DENIED'
+            })
+        }
+
+        const effectiveOrderWarehouseId = assignedWarehouseId || requestedWarehouseId || null
+
         if (normalizedClientRef) {
             const existingOrder = await Order.findOne({
                 where: { branch_id, client_reference: normalizedClientRef },
@@ -535,6 +595,26 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
             })
         }
 
+        const stockValidation = await MenuAvailabilityService.validateRequestedItems({
+            branchId: branch_id,
+            items: pricingDraft.orderItems || items,
+            warehouseId: effectiveOrderWarehouseId,
+            transaction: t
+        })
+        if (!stockValidation.ok) {
+            await t.rollback()
+            const summary = stockValidation.shortages
+                .slice(0, 3)
+                .map((row) => `${row.name_ar} (المطلوب ${row.requestedQty} / المتاح ${row.availableQty})`)
+                .join('، ')
+
+            return res.status(409).json({
+                message: `بعض الأصناف غير متوفرة في المخزن الحالي: ${summary}`,
+                code: 'INSUFFICIENT_STOCK_AT_ORDER_TIME',
+                details: stockValidation.shortages
+            })
+        }
+
         let shift_id = null
         if (req.user && order_type !== 'online') {
             const activeShift = await Shift.findOne({
@@ -553,6 +633,7 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
 
         const sysSettings = loadSettings()
         const workflowSettings = sysSettings?.workflow || {}
+        const kitchenConfig = getKitchenRoutingConfig(sysSettings)
         const onlineOrdersEnabled = workflowSettings.enableOnlineOrders !== false
         const autoAcceptOnline = workflowSettings.autoAcceptOnline === true
 
@@ -565,14 +646,17 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
         }
 
         let initialStatus = 'new'
-        let payment_status_final = req.body.payment_status === 'paid' ? 'paid' : 'pending'
+        let payment_status_final = req.user && order_type !== 'online' && req.body.payment_status === 'paid'
+            ? 'paid'
+            : 'pending'
         let autoAcceptedOnline = false
 
         // Load workflow settings for auto-complete
         const autoComplete = workflowSettings.autoCompleteOrders === true
 
         if (order_type === 'online') {
-            autoAcceptedOnline = autoAcceptOnline && (requestedPaymentMethod === 'cash' || payment_status_final === 'paid')
+            payment_status_final = 'pending'
+            autoAcceptedOnline = autoAcceptOnline && requestedPaymentMethod === 'cash'
             initialStatus = autoAcceptedOnline ? 'approved' : 'pending'
         }
 
@@ -662,7 +746,8 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
             unit_price: round2(item.unit_price),
             total_price: round2(item.total_price),
             batch_number: item.batch_number || null,
-            notes: item.notes || null
+            notes: item.notes || null,
+            selected_options: Array.isArray(item.selected_options) ? item.selected_options : []
         }))
 
         await OrderItem.bulkCreate(rows, { transaction: t })
@@ -714,7 +799,7 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
                 order: created
             })
             if (['approved', 'new', 'confirmed', 'preparing', 'ready'].includes(order.status)) {
-                io.to('kds:all').emit('order:new', created)
+                emitToKdsRooms(io, 'order:new', created, kitchenConfig)
             }
 
             if (created?.order_type === 'online' && created?.status === 'pending') {
@@ -731,6 +816,16 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
             })
         }
 
+        if (created?.order_type === 'online' && created?.status === 'approved') {
+            await maybePrintOnlineKitchenTicket(req, created, kitchenConfig)
+
+            if (notificationService?.orderApproved) {
+                notificationService.orderApproved(created).catch((notifyErr) => {
+                    logger.warn('Order approved notification failed:', notifyErr.message)
+                })
+            }
+        }
+
         AuditService.logOrderCreated(req, created, rows)
 
         // --- Auto-Complete Mode ---
@@ -743,7 +838,7 @@ router.post('/', orderLimiter, optionalAuth, createOrderValidator, validateDisco
                     user: req.user,
                     paymentMethod: requestedPaymentMethod,
                     paymentBreakdown: Array.isArray(payment_breakdown) ? payment_breakdown : null,
-                    warehouseId: req.body.warehouse_id || null
+                    warehouseId: effectiveOrderWarehouseId
                 })
 
                 if (io) {
@@ -827,6 +922,7 @@ router.put(
 
         const io = req.app.get('io')
         const notificationService = req.app.get('notificationService')
+        const kitchenConfig = getKitchenRoutingConfig()
         if (io) {
             io.to(`branch:${order.branch_id}`).emit('order:updated', {
                 orderId: order.id,
@@ -838,11 +934,11 @@ router.put(
                 status: order.status
             })
             if (['preparing', 'ready'].includes(status)) {
-                io.to('kds:all').emit('order:updated', {
+                emitToKdsRooms(io, 'order:updated', {
                     orderId: order.id,
                     status: order.status,
                     order
-                })
+                }, kitchenConfig)
             }
             if (status === 'ready') {
                 io.to('role:cashier').emit('order:ready_for_pickup', {
@@ -857,9 +953,12 @@ router.put(
                 })
             }
             if (status === 'approved') {
-                io.to('kds:all').emit('order:new', order)
-                io.to('kds').emit('order:new', order)
+                emitToKdsRooms(io, 'order:new', order, kitchenConfig)
             }
+        }
+
+        if (status === 'approved') {
+            await maybePrintOnlineKitchenTicket(req, order, kitchenConfig)
         }
 
         if (status === 'ready' && notificationService?.orderReady) {
@@ -902,6 +1001,12 @@ router.post('/:id/approve', authenticate, authorize('admin', 'manager', 'cashier
             return res.status(400).json({ message: 'الطلب ليس في حالة انتظار الموافقة' })
         }
 
+        const paymentMethod = String(order.payment_method || '').toLowerCase()
+        const paymentStatus = String(order.payment_status || '').toLowerCase()
+        if (order.order_type === 'online' && paymentMethod !== 'cash' && paymentStatus !== 'paid') {
+            return res.status(409).json({ message: 'لا يمكن قبول الطلب قبل تأكيد الدفع الإلكتروني' })
+        }
+
         const activeShift = await Shift.findOne({ where: { user_id: req.user.userId, status: 'open' } })
         if (!activeShift) {
             return res.status(403).json({
@@ -918,13 +1023,20 @@ router.post('/:id/approve', authenticate, authorize('admin', 'manager', 'cashier
             approved_at: new Date()
         })
 
+        const kitchenConfig = getKitchenRoutingConfig()
         const io = req.app.get('io')
         const notificationService = req.app.get('notificationService')
         if (io) {
-            io.to('kds:all').emit('order:new', order)
-            io.to('kds').emit('order:new', order)
+            io.to(`branch:${order.branch_id}`).emit('order:updated', {
+                orderId: order.id,
+                status: order.status,
+                order
+            })
+            emitToKdsRooms(io, 'order:new', order, kitchenConfig)
             io.to(`order:${order.id}`).emit('order:updated', { orderId: order.id, status: 'approved' })
         }
+
+        await maybePrintOnlineKitchenTicket(req, order, kitchenConfig)
 
         if (notificationService?.orderApproved) {
             notificationService.orderApproved(order).catch((notifyErr) => {
@@ -932,7 +1044,13 @@ router.post('/:id/approve', authenticate, authorize('admin', 'manager', 'cashier
             })
         }
 
-        res.json({ success: true, message: 'تمت الموافقة على الطلب وإرساله للمطبخ', data: order })
+        const approvalMessage = kitchenConfig.kdsEnabled
+            ? 'تمت الموافقة على الطلب وإرساله للمطبخ'
+            : (kitchenConfig.printKitchenReceipt
+                ? 'تمت الموافقة على الطلب وطباعة أمر المطبخ الورقي'
+                : 'تمت الموافقة على الطلب وينتظر المتابعة من شاشة الطلبات')
+
+        res.json({ success: true, message: approvalMessage, data: order })
     } catch (error) {
         logger.error('Approve order error:', error)
         res.status(500).json({ message: 'خطأ في الخادم' })
@@ -959,12 +1077,22 @@ router.post('/:id/handoff', authenticate, authorize('admin', 'manager', 'chef', 
 
         await order.update({ status: 'handed_to_cashier', handed_at: new Date() })
 
+        const kitchenConfig = getKitchenRoutingConfig()
         const io = req.app.get('io')
         if (io) {
+            io.to(`branch:${order.branch_id}`).emit('order:updated', {
+                orderId: order.id,
+                status: 'handed_to_cashier',
+                order
+            })
+            io.to(`order:${order.id}`).emit('order:updated', {
+                orderId: order.id,
+                status: 'handed_to_cashier',
+                order
+            })
             io.to('role:cashier').emit('order:handed', { order })
             io.to('cashier').emit('order:handed', { order })
-            io.to('kds:all').emit('order:removed', { orderId: order.id })
-            io.to('kds').emit('order:removed', { orderId: order.id })
+            emitToKdsRooms(io, 'order:removed', { orderId: order.id }, kitchenConfig)
         }
 
         res.json({ success: true, message: 'تم تسليم الطلب للكاشير', data: order })
@@ -994,12 +1122,24 @@ router.post('/:id/complete',
                 })
             }
 
-            const existingOrder = await Order.findByPk(id, { attributes: ['id', 'branch_id'] })
+            const existingOrder = await Order.findByPk(id, {
+                attributes: ['id', 'branch_id', 'order_type', 'delivery_status', 'status']
+            })
             if (!existingOrder) {
                 return res.status(404).json({ success: false, message: 'الطلب غير موجود' })
             }
             if (!hasBranchAccess(req, existingOrder.branch_id)) {
                 return res.status(403).json({ success: false, message: 'غير مصرح لك بهذا الإجراء' })
+            }
+            if (
+                ['delivery', 'online'].includes(existingOrder.order_type) &&
+                existingOrder.status !== 'completed' &&
+                !['picked_up', 'delivered'].includes(String(existingOrder.delivery_status || ''))
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'يجب أن يلتقط السائق الطلب أولًا قبل إكماله من مسار الطلبات'
+                })
             }
 
             const effectiveWarehouseId = assignedWarehouseId || warehouse_id
@@ -1014,6 +1154,16 @@ router.post('/:id/complete',
 
             const io = req.app.get('io')
             if (io) {
+                io.to(`branch:${order.branch_id}`).emit('order:updated', {
+                    orderId: order.id,
+                    status: order.status,
+                    order
+                })
+                io.to(`order:${order.id}`).emit('order:updated', {
+                    orderId: order.id,
+                    status: order.status,
+                    order
+                })
                 io.to(`branch:${order.branch_id}`).emit('order:completed', { order })
                 io.to('role:cashier').emit('order:removed', { orderId: order.id })
                 io.to('cashier').emit('order:removed', { orderId: order.id })
@@ -1092,12 +1242,12 @@ router.post('/:id/cancel', authenticate, requirePermission(PERMISSIONS.ORDERS_CA
                 : `سبب الإلغاء: ${finalCancelReason}`
         })
 
+        const kitchenConfig = getKitchenRoutingConfig()
         const io = req.app.get('io')
         const notificationService = req.app.get('notificationService')
         if (io) {
             io.to(`branch:${order.branch_id}`).emit('order:cancelled', { orderId: order.id })
-            io.to('kds:all').emit('order:cancelled', { orderId: order.id })
-            io.to('kds').emit('order:cancelled', { orderId: order.id })
+            emitToKdsRooms(io, 'order:cancelled', { orderId: order.id }, kitchenConfig)
             io.to('role:cashier').emit('order:cancelled', { orderId: order.id })
             io.to('cashier').emit('order:cancelled', { orderId: order.id })
         }

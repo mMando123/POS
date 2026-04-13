@@ -42,21 +42,21 @@ class PrintService {
 
     async updateDevice(id, data) {
         const device = await Device.findByPk(id)
-        if (!device) throw new Error('Ø§Ù„Ø¬Ù‡Ø§Ø² ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯')
+        if (!device) throw new Error('الجهاز غير موجود')
         await device.update(data)
         return device
     }
 
     async deleteDevice(id) {
         const device = await Device.findByPk(id)
-        if (!device) throw new Error('Ø§Ù„Ø¬Ù‡Ø§Ø² ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯')
+        if (!device) throw new Error('الجهاز غير موجود')
         await device.destroy()
         return true
     }
 
     async testDeviceConnection(deviceId) {
         const device = await Device.findByPk(deviceId)
-        if (!device) throw new Error('Ø§Ù„Ø¬Ù‡Ø§Ø² ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯')
+        if (!device) throw new Error('الجهاز غير موجود')
 
         try {
             if (device.connection_type === 'network') {
@@ -64,16 +64,16 @@ class PrintService {
                 await device.update({
                     status: isOnline ? 'online' : 'offline',
                     last_seen: isOnline ? new Date() : device.last_seen,
-                    last_error: isOnline ? null : 'ÙØ´Ù„ Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ø§Ù„Ø·Ø§Ø¨Ø¹Ø©'
+                    last_error: isOnline ? null : 'فشل الاتصال بالطابعة'
                 })
-                return { success: isOnline, message: isOnline ? 'Ø§Ù„Ø·Ø§Ø¨Ø¹Ø© Ù…ØªØµÙ„Ø©' : 'ÙØ´Ù„ Ø§Ù„Ø§ØªØµØ§Ù„' }
+                return { success: isOnline, message: isOnline ? 'الطابعة متصلة' : 'فشل الاتصال' }
             } else if (device.connection_type === 'usb') {
                 // USB testing requires electron/node-usb - mark as online for now
                 await device.update({ status: 'online', last_seen: new Date() })
-                return { success: true, message: 'USB - ÙŠØªØ·Ù„Ø¨ Ø§Ø®ØªØ¨Ø§Ø± Ù…Ø­Ù„ÙŠ' }
+                return { success: true, message: 'USB - يتطلب اختبارًا محليًا' }
             } else {
                 await device.update({ status: 'offline' })
-                return { success: false, message: 'Ù†ÙˆØ¹ Ø§Ù„Ø§ØªØµØ§Ù„ ØºÙŠØ± Ù…Ø¯Ø¹ÙˆÙ… Ù„Ù„Ø§Ø®ØªØ¨Ø§Ø±' }
+                return { success: false, message: 'نوع الاتصال غير مدعوم للاختبار' }
             }
         } catch (error) {
             await device.update({ status: 'error', last_error: error.message })
@@ -205,7 +205,7 @@ class PrintService {
 
     async retryJob(jobId) {
         const job = await PrintJob.findByPk(jobId)
-        if (!job) throw new Error('Ø§Ù„Ù…Ù‡Ù…Ø© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©')
+        if (!job) throw new Error('المهمة غير موجودة')
 
         await job.update({
             status: 'pending',
@@ -218,7 +218,7 @@ class PrintService {
 
     async cancelJob(jobId) {
         const job = await PrintJob.findByPk(jobId)
-        if (!job) throw new Error('Ø§Ù„Ù…Ù‡Ù…Ø© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø©')
+        if (!job) throw new Error('المهمة غير موجودة')
 
         await job.update({ status: 'cancelled' })
         this.printQueue.delete(job.id)
@@ -233,7 +233,7 @@ class PrintService {
             // Get appropriate device
             const device = await this.getDeviceByPurpose(type, order.branch_id)
             if (!device) {
-                console.log(`âš ï¸ No ${type} printer configured`)
+                logger.warn(`No ${type} printer configured`, { orderId: order?.id, orderNumber: order?.order_number })
                 return null
             }
 
@@ -247,7 +247,7 @@ class PrintService {
             const job = await this.createPrintJob({
                 device_id: device.id,
                 purpose: type,
-                title: `${type === 'kitchen' ? 'ØªØ°ÙƒØ±Ø© Ù…Ø·Ø¨Ø®' : 'ÙØ§ØªÙˆØ±Ø©'} #${order.order_number}`,
+                title: `${type === 'kitchen' ? 'تذكرة مطبخ' : 'فاتورة'} #${order.order_number}`,
                 content_type: 'escpos',
                 content: content,
                 entity_type: 'order',
@@ -259,7 +259,7 @@ class PrintService {
 
             return job
         } catch (error) {
-            console.error('Print order error:', error)
+            logger.error('Print order error', { error: error.message, orderId: order?.id, orderNumber: order?.order_number, type })
             throw error
         }
     }
@@ -294,13 +294,13 @@ class PrintService {
         commands.push({ cmd: 'align', data: 'center' })
         commands.push({ cmd: 'bold', data: true })
         commands.push({ cmd: 'size', data: 'large' })
-        commands.push({ cmd: 'text', data: template?.header_text || 'Ø§Ù„Ù…Ø·Ø¹Ù…' })
+        commands.push({ cmd: 'text', data: template?.header_text || 'المتجر' })
         commands.push({ cmd: 'size', data: 'normal' })
         commands.push({ cmd: 'bold', data: false })
         commands.push({ cmd: 'newline' })
 
         // Order info
-        commands.push({ cmd: 'text', data: `Ø·Ù„Ø¨ #${order.order_number}` })
+        commands.push({ cmd: 'text', data: `طلب #${order.order_number}` })
         commands.push({ cmd: 'text', data: new Date(order.created_at).toLocaleString('ar-SA') })
         commands.push({ cmd: 'text', data: this.getOrderTypeLabel(order.order_type) })
         commands.push({ cmd: 'newline' })
@@ -312,7 +312,7 @@ class PrintService {
         commands.push({ cmd: 'align', data: 'right' })
         const items = order.items || order.OrderItems || []
         for (const item of items) {
-            const itemName = item.Menu?.name_ar || item.name_ar || item.menu_name || 'ØµÙ†Ù'
+            const itemName = item.Menu?.name_ar || item.name_ar || item.menu_name || 'صنف'
             const qty = item.quantity
             const price = (parseFloat(item.unit_price || item.price) * qty).toFixed(2)
 
@@ -326,7 +326,7 @@ class PrintService {
 
             // Notes
             if (item.notes) {
-                commands.push({ cmd: 'text', data: `  â¤· ${item.notes}` })
+                commands.push({ cmd: 'text', data: `  - ${item.notes}` })
             }
         }
 
@@ -345,14 +345,14 @@ class PrintService {
         commands.push({
             cmd: 'columns',
             data: [
-                { text: 'Ø§Ù„Ù…Ø¬Ù…ÙˆØ¹ Ø§Ù„ÙØ±Ø¹ÙŠ:', width: width - 12, align: 'right' },
+                { text: 'المجموع الفرعي:', width: width - 12, align: 'right' },
                 { text: `${parseFloat(order.subtotal).toFixed(2)}`, width: 12, align: 'left' }
             ]
         })
         commands.push({
             cmd: 'columns',
             data: [
-                { text: `Ø§Ù„Ø¶Ø±ÙŠØ¨Ø© (${taxRatePercent.toFixed(2).replace(/\\.00$/, '')}%):`, width: width - 12, align: 'right' },
+                { text: `الضريبة (${taxRatePercent.toFixed(2).replace(/\.00$/, '')}%):`, width: width - 12, align: 'right' },
                 { text: `${taxAmountValue.toFixed(2)}`, width: 12, align: 'left' }
             ]
         })
@@ -361,8 +361,8 @@ class PrintService {
         commands.push({
             cmd: 'columns',
             data: [
-                { text: 'Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ:', width: width - 12, align: 'right' },
-                { text: `${parseFloat(order.total_amount).toFixed(2)} Ø±.Ø³`, width: 12, align: 'left' }
+                { text: 'الإجمالي:', width: width - 12, align: 'right' },
+                { text: `${parseFloat(order.total_amount).toFixed(2)} ر.س`, width: 12, align: 'left' }
             ]
         })
         commands.push({ cmd: 'size', data: 'normal' })
@@ -371,7 +371,7 @@ class PrintService {
         // Payment method
         commands.push({ cmd: 'newline' })
         commands.push({ cmd: 'align', data: 'center' })
-        commands.push({ cmd: 'text', data: `Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹: ${this.getPaymentMethodLabel(order.payment_method)}` })
+        commands.push({ cmd: 'text', data: `طريقة الدفع: ${this.getPaymentMethodLabel(order.payment_method)}` })
 
         // QR Code
         if (template?.show_qr && device.supports_qr) {
@@ -406,7 +406,7 @@ class PrintService {
         commands.push({ cmd: 'align', data: 'center' })
         commands.push({ cmd: 'bold', data: true })
         commands.push({ cmd: 'size', data: 'large' })
-        commands.push({ cmd: 'text', data: 'ðŸ³ ØªØ°ÙƒØ±Ø© Ù…Ø·Ø¨Ø®' })
+        commands.push({ cmd: 'text', data: 'تذكرة مطبخ' })
         commands.push({ cmd: 'size', data: 'double' })
         commands.push({ cmd: 'text', data: `#${order.order_number}` })
         commands.push({ cmd: 'size', data: 'normal' })
@@ -428,14 +428,14 @@ class PrintService {
 
         const items = order.items || order.OrderItems || []
         for (const item of items) {
-            const itemName = item.Menu?.name_ar || item.name_ar || item.menu_name || 'ØµÙ†Ù'
+            const itemName = item.Menu?.name_ar || item.name_ar || item.menu_name || 'صنف'
             commands.push({ cmd: 'bold', data: true })
             commands.push({ cmd: 'text', data: `${item.quantity}x  ${itemName}` })
             commands.push({ cmd: 'bold', data: false })
 
             if (item.notes) {
                 commands.push({ cmd: 'size', data: 'normal' })
-                commands.push({ cmd: 'text', data: `    ðŸ“ ${item.notes}` })
+                commands.push({ cmd: 'text', data: `    ملاحظة: ${item.notes}` })
                 commands.push({ cmd: 'size', data: 'large' })
             }
             commands.push({ cmd: 'newline' })
@@ -448,7 +448,7 @@ class PrintService {
         if (order.notes) {
             commands.push({ cmd: 'align', data: 'center' })
             commands.push({ cmd: 'bold', data: true })
-            commands.push({ cmd: 'text', data: 'âš ï¸ Ù…Ù„Ø§Ø­Ø¸Ø§Øª:' })
+            commands.push({ cmd: 'text', data: 'ملاحظات:' })
             commands.push({ cmd: 'text', data: order.notes })
             commands.push({ cmd: 'bold', data: false })
         }
@@ -487,14 +487,14 @@ class PrintService {
 
     async updateTemplate(id, data) {
         const template = await PrintTemplate.findByPk(id)
-        if (!template) throw new Error('Ø§Ù„Ù‚Ø§Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯')
+        if (!template) throw new Error('القالب غير موجود')
         await template.update(data)
         return template
     }
 
     async deleteTemplate(id) {
         const template = await PrintTemplate.findByPk(id)
-        if (!template) throw new Error('Ø§Ù„Ù‚Ø§Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯')
+        if (!template) throw new Error('القالب غير موجود')
         await template.destroy()
         return true
     }
@@ -519,20 +519,20 @@ class PrintService {
                 try {
                     await this.executeJob(job)
                 } catch (error) {
-                    console.error(`Job ${job.id} failed:`, error.message)
+                    logger.error(`Print job ${job.id} failed during queue processing`, { error: error.message })
                 } finally {
                     this.processingJobs.delete(job.id)
                 }
             }
         } catch (error) {
-            console.error('Queue processor error:', error)
+            logger.error('Queue processor error', { error: error.message })
         }
     }
 
     async executeJob(job) {
         const device = await Device.findByPk(job.device_id)
         if (!device) {
-            await job.update({ status: 'failed', error_message: 'Ø§Ù„Ø¬Ù‡Ø§Ø² ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            await job.update({ status: 'failed', error_message: 'الجهاز غير موجود' })
             return
         }
 
@@ -551,7 +551,7 @@ class PrintService {
                 // USB printing requires local agent
                 success = await this.sendToLocalAgent(device, job)
             } else {
-                throw new Error('Ù†ÙˆØ¹ Ø§Ù„Ø§ØªØµØ§Ù„ ØºÙŠØ± Ù…Ø¯Ø¹ÙˆÙ…')
+                throw new Error('نوع الاتصال غير مدعوم')
             }
 
             if (success) {
@@ -559,9 +559,9 @@ class PrintService {
                 await device.update({ status: 'online', last_seen: new Date(), last_error: null })
 
                 this.io?.emit('print:job:completed', { id: job.id })
-                console.log(`âœ… Print job ${job.id} completed`)
+                logger.info(`Print job ${job.id} completed`)
             } else {
-                throw new Error('ÙØ´Ù„ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„ Ù„Ù„Ø·Ø§Ø¨Ø¹Ø©')
+                throw new Error('فشل الإرسال إلى الطابعة')
             }
 
         } catch (error) {
@@ -582,7 +582,7 @@ class PrintService {
                 retrying: status === 'pending'
             })
 
-            console.error(`âŒ Print job ${job.id} failed:`, error.message)
+            logger.error(`Print job ${job.id} failed`, { error: error.message, retryCount, status })
         }
     }
 
@@ -690,20 +690,20 @@ class PrintService {
 
     getOrderTypeLabel(type) {
         const labels = {
-            online: 'ðŸŒ Ø£ÙˆÙ†Ù„Ø§ÙŠÙ†',
-            walkin: 'ðŸš¶ Ø­Ø¶ÙˆØ±ÙŠ',
-            delivery: 'ðŸš— ØªÙˆØµÙŠÙ„',
-            dine_in: 'ðŸ½ï¸ Ù…Ø­Ù„ÙŠ',
-            takeaway: 'ðŸ“¦ Ø§Ø³ØªÙ„Ø§Ù…'
+            online: 'أونلاين',
+            walkin: 'حضوري',
+            delivery: 'توصيل',
+            dine_in: 'محلي',
+            takeaway: 'استلام'
         }
         return labels[type] || type
     }
 
     getPaymentMethodLabel(method) {
         const labels = {
-            cash: 'Ù†Ù‚Ø¯Ø§Ù‹',
-            card: 'Ø¨Ø·Ø§Ù‚Ø©',
-            online: 'Ø¯ÙØ¹ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ'
+            cash: 'نقدًا',
+            card: 'بطاقة',
+            online: 'دفع إلكتروني'
         }
         return labels[method] || method
     }
@@ -719,9 +719,9 @@ class PrintService {
             // Print kitchen ticket
             await this.printKitchenTicket(order)
 
-            console.log(`ðŸ–¨ï¸ Auto-print triggered for order #${order.order_number}`)
+            logger.info(`Auto-print triggered for order #${order.order_number}`)
         } catch (error) {
-            console.error('Auto-print error:', error)
+            logger.error('Auto-print error', { error: error.message, orderId: order?.id, orderNumber: order?.order_number })
         }
     }
 
@@ -729,9 +729,9 @@ class PrintService {
         try {
             // Print kitchen ticket for approved online orders
             await this.printKitchenTicket(order)
-            console.log(`ðŸ–¨ï¸ Kitchen ticket printed for approved order #${order.order_number}`)
+            logger.info(`Kitchen ticket printed for approved order #${order.order_number}`)
         } catch (error) {
-            console.error('Auto-print error:', error)
+            logger.error('Auto-print error', { error: error.message, orderId: order?.id, orderNumber: order?.order_number })
         }
     }
 
@@ -739,9 +739,9 @@ class PrintService {
         try {
             // Print invoice/receipt
             await this.printReceipt(order)
-            console.log(`ðŸ–¨ï¸ Receipt printed for completed order #${order.order_number}`)
+            logger.info(`Receipt printed for completed order #${order.order_number}`)
         } catch (error) {
-            console.error('Auto-print error:', error)
+            logger.error('Auto-print error', { error: error.message, orderId: order?.id, orderNumber: order?.order_number })
         }
     }
 }

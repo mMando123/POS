@@ -3,13 +3,21 @@ const router = express.Router()
 const { body } = require('express-validator')
 const { Op } = require('sequelize')
 const { validate } = require('../middleware/validate')
-const { authenticate, requirePermission, PERMISSIONS } = require('../middleware/auth')
-const { Menu, MenuIngredient, Category, Warehouse, Stock, sequelize } = require('../models')
+const { authenticate, optionalAuth, requirePermission, requireAnyPermission, PERMISSIONS } = require('../middleware/auth')
+const { Menu, MenuIngredient, Category, Warehouse, Stock, Branch, sequelize } = require('../models')
 const { createMenuValidator, updateMenuValidator } = require('../validators/menuValidator')
 const UnitConversionService = require('../services/unitConversionService')
 const StockService = require('../services/stockService')
+const MenuAvailabilityService = require('../services/menuAvailabilityService')
 const { v4: uuidv4 } = require('uuid')
 const { normalizeSkuInput, assertSkuAvailable, generateUniqueSku } = require('../utils/sku')
+const { normalizeOptionGroups } = require('../utils/menuOptions')
+const {
+    INTERNAL_BARCODE_PREFIX,
+    buildInternalBarcode,
+    getNextInternalBarcode,
+    assertBarcodeAvailable
+} = require('../utils/barcode')
 
 const CORE_UOM_SET = new Set(['piece', 'kg', 'g', 'l', 'ml', 'box', 'pack', 'portion'])
 
@@ -122,6 +130,47 @@ const normalizeIngredients = (ingredients) => {
     return Array.from(merged.values())
 }
 
+const getDefaultActiveBranchId = async () => {
+    const fallbackBranch = await Branch.findOne({
+        where: { is_active: true },
+        attributes: ['id'],
+        order: [['created_at', 'ASC']]
+    })
+
+    return fallbackBranch?.id || null
+}
+
+const resolveReadableBranchId = async (req, requestedBranchId) => {
+    const explicitBranchId = String(requestedBranchId || '').trim() || null
+
+    if (req.user?.branchId) {
+        return req.user.branchId
+    }
+
+    if (req.user?.role === 'admin') {
+        return explicitBranchId || null
+    }
+
+    return explicitBranchId || await getDefaultActiveBranchId()
+}
+
+const ensureCategoryForMenu = async (categoryId, { transaction = null } = {}) => {
+    if (!categoryId) {
+        throw new Error('التصنيف مطلوب')
+    }
+
+    const category = await Category.findByPk(categoryId, {
+        attributes: ['id', 'name_ar', 'branch_id', 'is_active'],
+        transaction
+    })
+
+    if (!category) {
+        throw new Error('التصنيف المحدد غير موجود')
+    }
+
+    return category
+}
+
 const assertValidIngredientProducts = async (ingredients, { excludeMenuId = null, transaction = null } = {}) => {
     if (!ingredients.length) return []
 
@@ -164,13 +213,15 @@ const assertValidIngredientProducts = async (ingredients, { excludeMenuId = null
     return normalizedLines
 }
 
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
     try {
-        const { available_only, category_id } = req.query
+        const { available_only, category_id, warehouse_id, hide_out_of_stock, branch_id } = req.query
 
         const where = {}
         if (available_only === 'true') where.is_available = true
         if (category_id) where.category_id = category_id
+        const scopedBranchId = await resolveReadableBranchId(req, branch_id)
+        if (scopedBranchId) where.branch_id = scopedBranchId
 
         const items = await Menu.findAll({
             where,
@@ -181,16 +232,165 @@ router.get('/', async (req, res) => {
             order: [['display_order', 'ASC'], ['name_ar', 'ASC']]
         })
 
-        res.json({ data: items.map(withCompositeMode) })
+        const withMode = items.map(withCompositeMode)
+        const stockAware = await MenuAvailabilityService.annotateMenuItems(withMode, {
+            warehouseId: warehouse_id || null,
+            hideOutOfStock: hide_out_of_stock === 'true'
+        })
+
+        res.json({ data: stockAware })
     } catch (error) {
         console.error('Get menu error:', error)
         res.status(500).json({ message: 'خطأ في الخادم' })
     }
 })
 
-router.get('/:id', async (req, res) => {
+router.get('/barcode/next',
+    authenticate,
+    requireAnyPermission(PERMISSIONS.MENU_CREATE, PERMISSIONS.MENU_UPDATE),
+    async (req, res) => {
+        try {
+            const barcode = await getNextInternalBarcode(Menu)
+            res.json({
+                data: {
+                    barcode,
+                    format: 'code128',
+                    mode: 'internal_easy'
+                }
+            })
+        } catch (error) {
+            console.error('Get next barcode error:', error)
+            res.status(500).json({ message: 'تعذر توليد باركود جديد الآن' })
+        }
+    }
+)
+
+router.post('/barcode/bulk-generate',
+    authenticate,
+    requirePermission(PERMISSIONS.MENU_UPDATE),
+    [
+        body('ids').isArray({ min: 1 }).withMessage('يجب اختيار صنف واحد على الأقل'),
+        body('ids.*').isUUID().withMessage('معرف الصنف غير صالح'),
+        body('overwrite').optional().isBoolean().withMessage('قيمة overwrite غير صالحة'),
+        validate
+    ],
+    async (req, res) => {
+        const transaction = await sequelize.transaction()
+
+        try {
+            const ids = [...new Set(
+                (Array.isArray(req.body.ids) ? req.body.ids : [])
+                    .map((id) => String(id || '').trim())
+                    .filter(Boolean)
+            )]
+            const overwrite = Boolean(req.body.overwrite)
+
+            const items = await Menu.findAll({
+                where: {
+                    id: ids,
+                    ...(req.user.branchId ? { branch_id: req.user.branchId } : {})
+                },
+                attributes: ['id', 'name_ar', 'barcode', 'branch_id', 'created_at'],
+                order: [['created_at', 'ASC'], ['name_ar', 'ASC']],
+                transaction,
+                lock: transaction.LOCK.UPDATE
+            })
+
+            if (!items.length || items.length !== ids.length) {
+                await transaction.rollback()
+                return res.status(404).json({ message: 'لم يتم العثور على كل الأصناف المحددة داخل نطاق الفرع الحالي' })
+            }
+
+            let nextBarcode = await getNextInternalBarcode(Menu, { transaction })
+            let nextSequence = parseInt(String(nextBarcode).replace(/\D+/g, ''), 10) || 1
+            const existingInternalRows = await Menu.findAll({
+                where: {
+                    barcode: {
+                        [Op.like]: `${INTERNAL_BARCODE_PREFIX}%`
+                    }
+                },
+                attributes: ['barcode'],
+                transaction,
+                lock: transaction.LOCK.UPDATE
+            })
+            const usedBarcodes = new Set(
+                existingInternalRows
+                    .map((row) => String(row?.barcode || '').trim().toUpperCase())
+                    .filter(Boolean)
+            )
+
+            const updated = []
+            const skipped = []
+
+            for (const item of items) {
+                const currentBarcode = String(item.barcode || '').trim().toUpperCase()
+                if (currentBarcode && !overwrite) {
+                    skipped.push({
+                        id: item.id,
+                        name_ar: item.name_ar,
+                        barcode: currentBarcode,
+                        reason: 'already_has_barcode'
+                    })
+                    continue
+                }
+
+                let candidate = nextBarcode
+                while (usedBarcodes.has(candidate)) {
+                    nextSequence += 1
+                    candidate = buildInternalBarcode(nextSequence)
+                }
+
+                await item.update({ barcode: candidate }, { transaction })
+                usedBarcodes.add(candidate)
+                updated.push({
+                    id: item.id,
+                    name_ar: item.name_ar,
+                    barcode: candidate
+                })
+
+                nextSequence += 1
+                nextBarcode = buildInternalBarcode(nextSequence)
+            }
+
+            await transaction.commit()
+
+            if (updated.length > 0) {
+                const branchIds = [...new Set(items.map((item) => item.branch_id).filter(Boolean))]
+                branchIds.forEach((branchId) => {
+                    req.app.get('io').to(`branch:${branchId}`).emit('menu:updated', {
+                        action: 'bulk_barcode_generated',
+                        itemIds: updated.map((entry) => entry.id)
+                    })
+                })
+            }
+
+            return res.json({
+                message: updated.length > 0
+                    ? `تم توليد ${updated.length} باركود داخلي بنجاح`
+                    : 'لم يتم تعديل أي صنف',
+                data: {
+                    updated,
+                    skipped,
+                    updated_count: updated.length,
+                    skipped_count: skipped.length
+                }
+            })
+        } catch (error) {
+            await transaction.rollback()
+            console.error('Bulk generate barcodes error:', error)
+            return res.status(500).json({ message: error.message || 'تعذر توليد الباركودات الآن' })
+        }
+    }
+)
+
+router.get('/:id', optionalAuth, async (req, res) => {
     try {
-        const item = await Menu.findByPk(req.params.id, {
+        const scopedBranchId = await resolveReadableBranchId(req, req.query.branch_id)
+        const item = await Menu.findOne({
+            where: {
+                id: req.params.id,
+                ...(scopedBranchId ? { branch_id: scopedBranchId } : {})
+            },
             include: [
                 { model: Category, attributes: ['id', 'name_ar'] },
                 RECIPE_INCLUDE
@@ -229,16 +429,23 @@ router.post('/', authenticate, requirePermission(PERMISSIONS.MENU_CREATE), creat
             unit_of_measure,
             track_stock,
             ingredients,
-            composite_mode
+            composite_mode,
+            option_groups
         } = req.body
 
         const rawCostPrice = String(cost_price ?? '').trim()
         const parsedCostPrice = rawCostPrice === '' ? 0 : parseFloat(rawCostPrice)
-        if (!category_id) {
-            throw new Error('التصنيف مطلوب')
+        const finalItemType = item_type || 'sellable'
+        const category = await ensureCategoryForMenu(category_id, { transaction })
+        if (req.user.branchId && String(category.branch_id) !== String(req.user.branchId)) {
+            throw new Error('لا يمكن إنشاء صنف داخل تصنيف يتبع فرعًا آخر')
         }
         if (!Number.isFinite(parsedCostPrice) || parsedCostPrice < 0) {
             throw new Error('سعر التكلفة يجب أن يكون رقمًا موجبًا أو صفر')
+        }
+        const normalizedOptionGroups = normalizeOptionGroups(option_groups)
+        if (normalizedOptionGroups.length > 0 && finalItemType !== 'sellable') {
+            throw new Error('الخيارات والإضافات متاحة فقط للأصناف الجاهزة للبيع')
         }
 
         const normalizedIngredients = await assertValidIngredientProducts(
@@ -259,6 +466,7 @@ router.post('/', authenticate, requirePermission(PERMISSIONS.MENU_CREATE), creat
         const finalSku = requestedSku
             ? await assertSkuAvailable(Menu, requestedSku, { transaction })
             : await generateUniqueSku(Menu, { itemType: item_type || 'sellable', transaction })
+        const finalBarcode = await assertBarcodeAvailable(Menu, barcode, { transaction })
 
         const item = await Menu.create({
             name_ar,
@@ -267,16 +475,17 @@ router.post('/', authenticate, requirePermission(PERMISSIONS.MENU_CREATE), creat
             description_en,
             price,
             image_url,
-            category_id: category_id || null,
-            branch_id: req.user.branchId,
+            category_id: category.id,
+            branch_id: category.branch_id,
             display_order: display_order || 0,
             is_available: is_available !== undefined ? is_available : true,
             sku: finalSku,
-            barcode: barcode || null,
+            barcode: finalBarcode,
             cost_price: parsedCostPrice,
-            item_type: item_type || 'sellable',
+            item_type: finalItemType,
             unit_of_measure: normalizeUomInput(unit_of_measure, 'piece'),
-            track_stock: finalTrackStock
+            track_stock: finalTrackStock,
+            option_groups: normalizedOptionGroups
         }, { transaction })
 
         if (normalizedIngredients.length > 0) {
@@ -298,7 +507,7 @@ router.post('/', authenticate, requirePermission(PERMISSIONS.MENU_CREATE), creat
             include: [{ model: Category, attributes: ['id', 'name_ar'] }, RECIPE_INCLUDE]
         })
 
-        req.app.get('io').to(`branch:${req.user.branchId}`).emit('menu:updated', {
+        req.app.get('io').to(`branch:${result.branch_id}`).emit('menu:updated', {
             action: 'created',
             item: result
         })
@@ -318,7 +527,7 @@ router.put('/:id', authenticate, requirePermission(PERMISSIONS.MENU_UPDATE), upd
         const { id } = req.params
         const item = await Menu.findByPk(id, { transaction })
 
-        if (!item) {
+        if (!item || (req.user.branchId && String(item.branch_id) !== String(req.user.branchId))) {
             await transaction.rollback()
             return res.status(404).json({ message: 'العنصر غير موجود' })
         }
@@ -327,6 +536,7 @@ router.put('/:id', authenticate, requirePermission(PERMISSIONS.MENU_UPDATE), upd
         const requestedCompositeMode = Object.prototype.hasOwnProperty.call(updateData, 'composite_mode')
             ? updateData.composite_mode
             : undefined
+        const hasOptionGroupsInput = Object.prototype.hasOwnProperty.call(updateData, 'option_groups')
         const hasTrackStockInput = Object.prototype.hasOwnProperty.call(updateData, 'track_stock')
         const requestedTrackStock = updateData.track_stock
         const incomingIngredients = Object.prototype.hasOwnProperty.call(updateData, 'ingredients')
@@ -344,12 +554,28 @@ router.put('/:id', authenticate, requirePermission(PERMISSIONS.MENU_UPDATE), upd
             : item.cost_price
         const finalCostPriceText = String(finalCostPriceRaw ?? '').trim()
         const finalCostPrice = finalCostPriceText === '' ? 0 : parseFloat(finalCostPriceText)
+        const finalItemType = Object.prototype.hasOwnProperty.call(updateData, 'item_type')
+            ? updateData.item_type
+            : item.item_type
 
         if (!finalCategoryId) {
             throw new Error('التصنيف مطلوب')
         }
+        const category = await ensureCategoryForMenu(finalCategoryId, { transaction })
+        if (String(category.branch_id) !== String(item.branch_id)) {
+            throw new Error('لا يمكن ربط الصنف بتصنيف يتبع فرعًا آخر')
+        }
         if (!Number.isFinite(finalCostPrice) || finalCostPrice < 0) {
             throw new Error('سعر التكلفة يجب أن يكون رقمًا موجبًا أو صفر')
+        }
+        if (hasOptionGroupsInput) {
+            updateData.option_groups = normalizeOptionGroups(updateData.option_groups)
+        }
+        const effectiveOptionGroups = hasOptionGroupsInput
+            ? updateData.option_groups
+            : (Array.isArray(item.option_groups) ? item.option_groups : [])
+        if (Array.isArray(effectiveOptionGroups) && effectiveOptionGroups.length > 0 && finalItemType !== 'sellable') {
+            throw new Error('الخيارات والإضافات متاحة فقط للأصناف الجاهزة للبيع')
         }
 
         updateData.cost_price = finalCostPrice
@@ -412,6 +638,14 @@ router.put('/:id', authenticate, requirePermission(PERMISSIONS.MENU_UPDATE), upd
             updateData.sku = normalizedSku
         }
 
+        if (Object.prototype.hasOwnProperty.call(updateData, 'barcode')) {
+            updateData.barcode = await assertBarcodeAvailable(Menu, updateData.barcode, { transaction, excludeId: id })
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updateData, 'category_id')) {
+            updateData.category_id = category.id
+        }
+
         await item.update(updateData, { transaction })
         await transaction.commit()
 
@@ -419,7 +653,7 @@ router.put('/:id', authenticate, requirePermission(PERMISSIONS.MENU_UPDATE), upd
             include: [{ model: Category, attributes: ['id', 'name_ar'] }, RECIPE_INCLUDE]
         })
 
-        req.app.get('io').to(`branch:${req.user.branchId}`).emit('menu:updated', {
+        req.app.get('io').to(`branch:${result.branch_id}`).emit('menu:updated', {
             action: 'updated',
             item: result
         })
@@ -457,7 +691,7 @@ router.post('/:id/build',
                 lock: transaction.LOCK.UPDATE
             })
 
-            if (!item) {
+            if (!item || (req.user.branchId && String(item.branch_id) !== String(req.user.branchId))) {
                 await transaction.rollback()
                 return res.status(404).json({ message: 'العنصر غير موجود' })
             }
@@ -588,7 +822,7 @@ router.delete('/:id', authenticate, requirePermission(PERMISSIONS.MENU_DELETE), 
         const { id } = req.params
 
         const item = await Menu.findByPk(id)
-        if (!item) {
+        if (!item || (req.user.branchId && String(item.branch_id) !== String(req.user.branchId))) {
             return res.status(404).json({ message: 'العنصر غير موجود' })
         }
 
@@ -630,7 +864,7 @@ router.delete('/:id', authenticate, requirePermission(PERMISSIONS.MENU_DELETE), 
 
         await item.destroy()
 
-        req.app.get('io').to(`branch:${req.user.branchId}`).emit('menu:updated', {
+        req.app.get('io').to(`branch:${item.branch_id}`).emit('menu:updated', {
             action: 'deleted',
             itemId: id
         })

@@ -7,11 +7,14 @@ const router = express.Router()
 const { body, validationResult } = require('express-validator')
 const { authenticate, authorize } = require('../middleware/auth')
 const { Op } = require('sequelize')
+const OrderFinalizationService = require('../services/orderFinalizationService')
 
 const getModels = () => require('../models')
 const DELIVERY_ORDER_TYPES = ['delivery', 'online']
 const DELIVERY_OPERATOR_ROLES = ['admin', 'manager', 'supervisor', 'cashier']
 const DELIVERY_ADMIN_ROLES = ['admin', 'manager', 'supervisor']
+const ACTIVE_DELIVERY_STATUSES = ['assigned', 'picked_up', 'in_transit']
+const RETRYABLE_DELIVERY_STATUSES = ['pending', 'failed']
 const DELIVERY_PERSONNEL_BASE_ATTRIBUTES = [
     'id',
     'name_ar',
@@ -66,6 +69,87 @@ const canAccessBranch = (req, branchId) => {
     if (req.user?.role === 'admin') return true
     if (!req.user?.branchId) return true
     return String(req.user.branchId) === String(branchId || '')
+}
+
+const isAwaitingDeliveryAssignment = (order) => (
+    order?.status === 'handed_to_cashier' &&
+    (!order?.delivery_status || RETRYABLE_DELIVERY_STATUSES.includes(order.delivery_status))
+)
+
+const releaseRiderIfIdle = async (deliveryPersonnelId) => {
+    if (!deliveryPersonnelId) return
+
+    const { Order, DeliveryPersonnel } = getModels()
+    const activeOrders = await Order.count({
+        where: {
+            delivery_personnel_id: deliveryPersonnelId,
+            delivery_status: { [Op.in]: ACTIVE_DELIVERY_STATUSES }
+        }
+    })
+
+    if (activeOrders === 0) {
+        await DeliveryPersonnel.update(
+            { status: 'available' },
+            { where: { id: deliveryPersonnelId } }
+        )
+    }
+}
+
+const emitOrderLifecycleUpdate = (req, order) => {
+    const io = req.app.get('io')
+    if (!io || !order?.branch_id) return
+
+    const payload = {
+        orderId: order.id,
+        status: order.status,
+        delivery_status: order.delivery_status,
+        order
+    }
+
+    io.to(`branch:${order.branch_id}`).emit('order:updated', payload)
+    io.to(`order:${order.id}`).emit('order:updated', payload)
+
+    if (order.status === 'completed') {
+        io.to(`branch:${order.branch_id}`).emit('order:completed', { order })
+        io.to('role:cashier').emit('order:removed', { orderId: order.id })
+        io.to('cashier').emit('order:removed', { orderId: order.id })
+    }
+}
+
+const mapDeliveryWorkflowError = (error) => {
+    const errorMessage = String(error?.message || '')
+
+    if (errorMessage.startsWith('ORDER_NOT_FOUND')) {
+        return { status: 404, message: 'الطلب غير موجود' }
+    }
+
+    if (errorMessage.startsWith('ORDER_ALREADY_FINALIZED')) {
+        return { status: 400, message: 'الطلب مكتمل أو ملغي بالفعل' }
+    }
+
+    if (errorMessage.startsWith('INVALID_WAREHOUSE_FOR_BRANCH')) {
+        return { status: 400, message: 'المستودع المحدد غير صالح لهذا الفرع' }
+    }
+
+    if (errorMessage.startsWith('NO_DEFAULT_WAREHOUSE_FOR_BRANCH')) {
+        return { status: 500, message: 'لا يوجد مستودع افتراضي لهذا الفرع' }
+    }
+
+    if (errorMessage.startsWith('STOCK_DEDUCTION_FAILED')) {
+        return {
+            status: 400,
+            message: `فشل خصم المخزون: ${errorMessage.split(': ').slice(1).join(': ')}`
+        }
+    }
+
+    if (errorMessage.startsWith('PAYMENT_BREAKDOWN_') || errorMessage.startsWith('PAYMENT_')) {
+        return { status: 400, message: 'بيانات الدفع غير مكتملة لإغلاق الطلب' }
+    }
+
+    return {
+        status: 500,
+        message: error?.message || 'خطأ في معالجة مسار التوصيل'
+    }
 }
 
 // ─────────────────────────────────────────────────────
@@ -192,7 +276,8 @@ router.patch('/personnel/:id/status', authenticate, authorize(...DELIVERY_ADMIN_
 await person.update({ status })
         res.json({ message: `تم تغيير حالة ${person.name_ar} إلى ${status}`, data: person })
     } catch (error) {
-        res.status(500).json({ message: error.message })
+        const mapped = mapDeliveryWorkflowError(error)
+        res.status(mapped.status).json({ message: mapped.message })
     }
 })
 
@@ -215,7 +300,8 @@ router.delete('/personnel/:id', authenticate, authorize('admin'), async (req, re
 await person.update({ is_active: false, status: 'offline' })
         res.json({ message: 'تم تعطيل موظف الديليفري' })
     } catch (error) {
-        res.status(500).json({ message: error.message })
+        const mapped = mapDeliveryWorkflowError(error)
+        return res.status(mapped.status).json({ message: mapped.message })
     }
 })
 
@@ -238,13 +324,15 @@ router.get('/orders', authenticate, authorize(...DELIVERY_OPERATOR_ROLES), async
         const scopedBranchId = resolveScopedBranchId(req, branch_id)
         if (scopedBranchId) where.branch_id = scopedBranchId
 
-        // Include today's delivered orders so they show in the board's "تم التوصيل" column
         if (!req.query.include_completed) {
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)
             where[Op.or] = [
-                { delivery_status: { [Op.ne]: 'delivered' } },
-                { delivery_status: null },
+                {
+                    status: 'handed_to_cashier',
+                    delivery_status: { [Op.in]: [...RETRYABLE_DELIVERY_STATUSES, ...ACTIVE_DELIVERY_STATUSES] }
+                },
+                { status: 'handed_to_cashier', delivery_status: null },
                 { delivery_status: 'delivered', delivered_at: { [Op.gte]: todayStart } }
             ]
         }
@@ -271,7 +359,7 @@ router.get('/orders', authenticate, authorize(...DELIVERY_OPERATOR_ROLES), async
             return res.status(403).json({ message: 'Access to this branch is not allowed' })
         }
         console.error('Get delivery orders error:', error)
-        res.status(500).json({ message: error.message || 'خطأ في جلب طلبات الديليفري' })
+        res.status(500).json({ message: error.message || 'Error loading delivery orders' })
     }
 })
 
@@ -285,37 +373,51 @@ router.post('/orders/:id/assign', authenticate, authorize(...DELIVERY_OPERATOR_R
         const { delivery_personnel_id } = req.body
         const deliveryPersonnelAttributes = await getDeliveryPersonnelAttributes()
 
-        if (!delivery_personnel_id) return res.status(400).json({ message: 'يجب تحديد موظف الديليفري' })
+        if (!delivery_personnel_id) {
+            return res.status(400).json({ message: 'Delivery rider is required' })
+        }
 
         const order = await Order.findByPk(req.params.id)
-        if (!order) return res.status(404).json({ message: 'الطلب غير موجود' })
+        if (!order) return res.status(404).json({ message: 'Order not found' })
         if (!canAccessBranch(req, order.branch_id)) return res.status(403).json({ message: 'Access to this branch is not allowed' })
         if (!DELIVERY_ORDER_TYPES.includes(order.order_type)) {
-            return res.status(400).json({ message: 'هذا الطلب ليس ضمن قناة توصيل مدعومة' })
+            return res.status(400).json({ message: 'This order is not a supported delivery channel' })
+        }
+        if (['completed', 'cancelled'].includes(order.status) || order.delivery_status === 'delivered') {
+            return res.status(400).json({ message: 'This order is already closed' })
+        }
+        if (order.status !== 'handed_to_cashier') {
+            return res.status(400).json({ message: 'Order must be handed to cashier before assigning delivery' })
+        }
+        if (!isAwaitingDeliveryAssignment(order)) {
+            return res.status(400).json({ message: 'This order cannot be assigned right now' })
         }
 
         const rider = await DeliveryPersonnel.findByPk(delivery_personnel_id, {
             attributes: deliveryPersonnelAttributes
         })
-        if (!rider) return res.status(404).json({ message: 'موظف الديليفري غير موجود' })
-        if (!rider.is_active) return res.status(400).json({ message: 'موظف الديليفري غير نشط' })
-        if (String(rider.branch_id || '') !== String(order.branch_id || '')) {
-            return res.status(400).json({ message: '???????? ?????????????????? ???? ???????? ?????? ?????? ??????????' })
+        if (!rider) return res.status(404).json({ message: 'Delivery rider not found' })
+        if (!rider.is_active) return res.status(400).json({ message: 'Delivery rider is inactive' })
+        if (String(rider.branch_id || '') != String(order.branch_id || '')) {
+            return res.status(400).json({ message: 'Delivery rider must belong to the same branch as the order' })
         }
 
         await order.update({
             delivery_personnel_id,
             delivery_status: 'assigned',
-            delivery_assigned_at: new Date()
+            delivery_assigned_at: new Date(),
+            picked_up_at: null,
+            delivered_at: null
         })
 
-        // Mark rider as busy
         await rider.update({ status: 'busy' })
+        emitOrderLifecycleUpdate(req, order)
 
-        res.json({ message: `تم تعيين ${rider.name_ar} للطلب #${order.order_number}`, data: order })
+        res.json({ message: `Assigned ${rider.name_ar} to order #${order.order_number}`, data: order })
     } catch (error) {
         console.error('Assign delivery error:', error)
-        res.status(500).json({ message: error.message || 'خطأ في تعيين الديليفري' })
+        const mapped = mapDeliveryWorkflowError(error)
+        res.status(mapped.status).json({ message: mapped.message })
     }
 })
 
@@ -327,90 +429,130 @@ router.post('/orders/:id/pickup', authenticate, authorize(...DELIVERY_OPERATOR_R
     try {
         const { Order } = getModels()
         const order = await Order.findByPk(req.params.id)
-        if (!order) return res.status(404).json({ message: 'الطلب غير موجود' })
+        if (!order) return res.status(404).json({ message: 'Order not found' })
         if (!canAccessBranch(req, order.branch_id)) return res.status(403).json({ message: 'Access to this branch is not allowed' })
-        if (!order.delivery_personnel_id) return res.status(400).json({ message: 'لم يتم تعيين ديليفري بعد' })
+        if (!DELIVERY_ORDER_TYPES.includes(order.order_type)) {
+            return res.status(400).json({ message: 'This order is not a supported delivery channel' })
+        }
+        if (['completed', 'cancelled'].includes(order.status) || order.delivery_status === 'delivered') {
+            return res.status(400).json({ message: 'This order is already closed' })
+        }
+        if (order.status !== 'handed_to_cashier') {
+            return res.status(400).json({ message: 'Order must be handed to cashier before pickup' })
+        }
+        if (!order.delivery_personnel_id) {
+            return res.status(400).json({ message: 'No delivery rider has been assigned yet' })
+        }
+        if (order.delivery_status !== 'assigned') {
+            return res.status(400).json({ message: 'Order must be assigned before pickup can be recorded' })
+        }
 
         await order.update({
             delivery_status: 'picked_up',
             picked_up_at: new Date()
         })
 
-        res.json({ message: `الطلب #${order.order_number} تم استلامه من الكاشير`, data: order })
+        emitOrderLifecycleUpdate(req, order)
+        res.json({ message: `Order #${order.order_number} picked up from cashier`, data: order })
     } catch (error) {
-        res.status(500).json({ message: error.message })
+        const mapped = mapDeliveryWorkflowError(error)
+        res.status(mapped.status).json({ message: mapped.message })
     }
 })
 
 /**
  * POST /api/delivery/orders/:id/complete
- * Mark order as delivered successfully
+ * Mark order as delivered successfully and finalize it atomically
  */
 router.post('/orders/:id/complete', authenticate, authorize(...DELIVERY_OPERATOR_ROLES), async (req, res) => {
     try {
-        const { Order, DeliveryPersonnel } = getModels()
+        const { Order } = getModels()
+        const { payment_method, payment_breakdown, warehouse_id } = req.body || {}
         const order = await Order.findByPk(req.params.id)
-        if (!order) return res.status(404).json({ message: 'الطلب غير موجود' })
+        if (!order) return res.status(404).json({ message: 'Order not found' })
         if (!canAccessBranch(req, order.branch_id)) return res.status(403).json({ message: 'Access to this branch is not allowed' })
-
-        await order.update({
-            delivery_status: 'delivered',
-            delivered_at: new Date()
-        })
-
-        // Free up the rider if they have no more active orders
-        if (order.delivery_personnel_id) {
-            const activeOrders = await Order.count({
-                where: {
-                    delivery_personnel_id: order.delivery_personnel_id,
-                    delivery_status: { [Op.in]: ['assigned', 'picked_up', 'in_transit'] }
-                }
-            })
-            if (activeOrders === 0) {
-                await DeliveryPersonnel.update(
-                    { status: 'available' },
-                    { where: { id: order.delivery_personnel_id } }
-                )
-            }
+        if (!DELIVERY_ORDER_TYPES.includes(order.order_type)) {
+            return res.status(400).json({ message: 'This order is not a supported delivery channel' })
+        }
+        if (order.status === 'completed' && order.delivery_status === 'delivered') {
+            return res.json({ message: `Order #${order.order_number} is already delivered and closed`, data: order })
+        }
+        if (order.status !== 'handed_to_cashier') {
+            return res.status(400).json({ message: 'Order must be handed to cashier before delivery can be completed' })
+        }
+        if (!order.delivery_personnel_id) {
+            return res.status(400).json({ message: 'Cannot complete delivery before assigning a rider' })
+        }
+        if (order.delivery_status !== 'picked_up') {
+            return res.status(400).json({ message: 'Rider must pick up the order before delivery can be completed' })
         }
 
-        res.json({ message: `الطلب #${order.order_number} تم تسليمه بنجاح ✅`, data: order })
+        const finalizedOrder = await OrderFinalizationService.finalizeOrder(order.id, {
+            user: req.user,
+            paymentMethod: payment_method || order.payment_method || 'cash',
+            paymentBreakdown: payment_breakdown,
+            warehouseId: warehouse_id || null
+        })
+
+        await finalizedOrder.update({
+            delivery_status: 'delivered',
+            delivered_at: finalizedOrder.delivered_at || new Date()
+        })
+
+        await releaseRiderIfIdle(finalizedOrder.delivery_personnel_id)
+        emitOrderLifecycleUpdate(req, finalizedOrder)
+
+        res.json({
+            message: `Order #${finalizedOrder.order_number} delivered and closed successfully`,
+            data: finalizedOrder
+        })
     } catch (error) {
-        res.status(500).json({ message: error.message })
+        const mapped = mapDeliveryWorkflowError(error)
+        res.status(mapped.status).json({ message: mapped.message })
     }
 })
 
 /**
  * POST /api/delivery/orders/:id/fail
- * Mark delivery as failed
+ * Mark delivery as failed and move the order back for reassignment
  */
 router.post('/orders/:id/fail', authenticate, authorize(...DELIVERY_OPERATOR_ROLES), async (req, res) => {
     try {
-        const { Order, DeliveryPersonnel } = getModels()
+        const { Order } = getModels()
         const { reason } = req.body
         const order = await Order.findByPk(req.params.id)
-        if (!order) return res.status(404).json({ message: 'الطلب غير موجود' })
+        if (!order) return res.status(404).json({ message: 'Order not found' })
         if (!canAccessBranch(req, order.branch_id)) return res.status(403).json({ message: 'Access to this branch is not allowed' })
-
-        // DEF-005 FIX: Reset order to handed_to_cashier so cashier can reassign
-        const updateFields = { delivery_status: 'failed', status: 'handed_to_cashier' }
-        if (reason) updateFields.notes = ((order.notes || '') + ` | فشل التوصيل: ${reason}`).trim()
-        await order.update(updateFields)
-
-        if (order.delivery_personnel_id) {
-            await DeliveryPersonnel.update(
-                { status: 'available' },
-                { where: { id: order.delivery_personnel_id } }
-            )
+        if (!DELIVERY_ORDER_TYPES.includes(order.order_type)) {
+            return res.status(400).json({ message: 'This order is not a supported delivery channel' })
+        }
+        if (['completed', 'cancelled'].includes(order.status) || order.delivery_status === 'delivered') {
+            return res.status(400).json({ message: 'Cannot mark a closed order as delivery failed' })
+        }
+        if (!ACTIVE_DELIVERY_STATUSES.includes(order.delivery_status)) {
+            return res.status(400).json({ message: 'Cannot mark delivery failure before the rider starts the trip' })
         }
 
-        res.json({ message: `تم تسجيل فشل توصيل الطلب #${order.order_number}`, data: order })
+        const updateFields = {
+            delivery_status: 'failed',
+            status: 'handed_to_cashier',
+            delivery_assigned_at: null,
+            picked_up_at: null,
+            delivered_at: null
+        }
+        if (reason) updateFields.notes = ((order.notes || '') + ` | Delivery failure: ${reason}`).trim()
+        await order.update(updateFields)
+
+        await releaseRiderIfIdle(order.delivery_personnel_id)
+        emitOrderLifecycleUpdate(req, order)
+
+        res.json({ message: `Delivery failure recorded for order #${order.order_number}`, data: order })
     } catch (error) {
-        res.status(500).json({ message: error.message })
+        const mapped = mapDeliveryWorkflowError(error)
+        res.status(mapped.status).json({ message: mapped.message })
     }
 })
 
-// ─────────────────────────────────────────────────────
 // REPORTS & STATS
 // ─────────────────────────────────────────────────────
 

@@ -47,7 +47,7 @@ router.get('/', authenticate, async (req, res) => {
         })
     } catch (error) {
         console.error('Get suppliers error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ù…ÙˆØ±Ø¯ÙŠÙ†' })
+        res.status(500).json({ message: 'خطأ في جلب الموردين' })
     }
 })
 
@@ -63,10 +63,10 @@ router.get('/reconcile', authenticate, authorize('admin'), async (req, res) => {
     try {
         const AccountingService = require('../services/accountingService')
         const report = await AccountingService.reconcileAllSuppliers({ autoFix: false })
-        res.json({ message: 'ØªÙ‚Ø±ÙŠØ± ØªØ³ÙˆÙŠØ© Ø£Ø±ØµØ¯Ø© Ø§Ù„Ù…ÙˆØ±Ø¯ÙŠÙ† (Ø¨Ø¯ÙˆÙ† ØªØ¹Ø¯ÙŠÙ„)', data: report })
+        res.json({ message: 'تقرير تسوية أرصدة الموردين (بدون تعديل)', data: report })
     } catch (error) {
         console.error('Reconcile error:', error)
-        res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ ØªÙ‚Ø±ÙŠØ± Ø§Ù„ØªØ³ÙˆÙŠØ©' })
+        res.status(500).json({ message: error.message || 'خطأ في تقرير التسوية' })
     }
 })
 
@@ -75,12 +75,12 @@ router.post('/reconcile', authenticate, authorize('admin'), async (req, res) => 
         const AccountingService = require('../services/accountingService')
         const report = await AccountingService.reconcileAllSuppliers({ autoFix: true })
         res.json({
-            message: `ØªÙ… Ø§Ù„ØªØ³ÙˆÙŠØ©: ${report.matched} Ù…ØªØ·Ø§Ø¨Ù‚ØŒ ${report.corrected} ØªÙ… ØªØ¹Ø¯ÙŠÙ„Ù‡ âœ…`,
+            message: `تمت التسوية: ${report.matched} متطابق، ${report.corrected} تم تعديله بنجاح`,
             data: report
         })
     } catch (error) {
         console.error('Reconcile+fix error:', error)
-        res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ ØªØ³ÙˆÙŠØ© Ø£Ø±ØµØ¯Ø© Ø§Ù„Ù…ÙˆØ±Ø¯ÙŠÙ†' })
+        res.status(500).json({ message: error.message || 'خطأ في تسوية أرصدة الموردين' })
     }
 })
 
@@ -148,13 +148,13 @@ router.get('/:id', authenticate, async (req, res) => {
         })
 
         if (!supplier) {
-            return res.status(404).json({ message: 'Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            return res.status(404).json({ message: 'المورد غير موجود' })
         }
 
         res.json({ data: supplier })
     } catch (error) {
         console.error('Get supplier error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…ÙˆØ±Ø¯' })
+        res.status(500).json({ message: 'خطأ في جلب بيانات المورد' })
     }
 })
 
@@ -204,10 +204,10 @@ router.post('/',
     authenticate,
     authorize('admin', 'manager'),
     [
-        body('name_ar').notEmpty().withMessage('Ø§Ø³Ù… Ø§Ù„Ù…ÙˆØ±Ø¯ Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ù…Ø·Ù„ÙˆØ¨').trim(),
+        body('name_ar').notEmpty().withMessage('اسم المورد بالعربية مطلوب').trim(),
         body('phone').optional().trim(),
-        body('email').optional().isEmail().withMessage('Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ ØºÙŠØ± ØµØ­ÙŠØ­'),
-        body('payment_terms').optional().isInt({ min: 0 }).withMessage('Ø´Ø±ÙˆØ· Ø§Ù„Ø¯ÙØ¹ ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† Ø±Ù‚Ù… ØµØ­ÙŠØ­')
+        body('email').optional().isEmail().withMessage('البريد الإلكتروني غير صحيح'),
+        body('payment_terms').optional().isInt({ min: 0 }).withMessage('شروط الدفع يجب أن تكون رقمًا صحيحًا')
     ],
     async (req, res) => {
         const errors = validationResult(req)
@@ -226,12 +226,12 @@ router.post('/',
             })
 
             res.status(201).json({
-                message: 'ØªÙ… Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù…ÙˆØ±Ø¯ Ø¨Ù†Ø¬Ø§Ø­',
+                message: 'تمت إضافة المورد بنجاح',
                 data: supplier
             })
         } catch (error) {
             console.error('Create supplier error:', error)
-            res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù…ÙˆØ±Ø¯' })
+            res.status(500).json({ message: error.message || 'خطأ في إضافة المورد' })
         }
     }
 )
@@ -241,9 +241,9 @@ router.put('/:id',
     authenticate,
     authorize('admin', 'manager'),
     [
-        body('name_ar').optional().notEmpty().withMessage('Ø§Ø³Ù… Ø§Ù„Ù…ÙˆØ±Ø¯ Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø£Ù† ÙŠÙƒÙˆÙ† ÙØ§Ø±ØºØ§Ù‹').trim(),
-        body('email').optional().isEmail().withMessage('Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ ØºÙŠØ± ØµØ­ÙŠØ­'),
-        body('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Ø§Ù„ØªÙ‚ÙŠÙŠÙ… ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ÙŠÙ† 1 Ùˆ 5')
+        body('name_ar').optional().notEmpty().withMessage('اسم المورد لا يمكن أن يكون فارغًا').trim(),
+        body('email').optional().isEmail().withMessage('البريد الإلكتروني غير صحيح'),
+        body('rating').optional().isInt({ min: 1, max: 5 }).withMessage('التقييم يجب أن يكون بين 1 و5')
     ],
     async (req, res) => {
         const errors = validationResult(req)
@@ -254,7 +254,7 @@ router.put('/:id',
         try {
             const supplier = await Supplier.findByPk(req.params.id)
             if (!supplier) {
-                return res.status(404).json({ message: 'Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+                return res.status(404).json({ message: 'المورد غير موجود' })
             }
 
             // Don't allow changing the code
@@ -263,12 +263,12 @@ router.put('/:id',
             await supplier.update(req.body)
 
             res.json({
-                message: 'ØªÙ… ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…ÙˆØ±Ø¯',
+                message: 'تم تحديث بيانات المورد',
                 data: supplier
             })
         } catch (error) {
             console.error('Update supplier error:', error)
-            res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…ÙˆØ±Ø¯' })
+            res.status(500).json({ message: error.message || 'خطأ في تحديث المورد' })
         }
     }
 )
@@ -281,7 +281,7 @@ router.delete('/:id',
         try {
             const supplier = await Supplier.findByPk(req.params.id)
             if (!supplier) {
-                return res.status(404).json({ message: 'Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+                return res.status(404).json({ message: 'المورد غير موجود' })
             }
 
 
@@ -301,10 +301,10 @@ router.delete('/:id',
                 metadata: { reason: 'User requested deletion' }
             })
 
-            res.json({ message: 'ØªÙ… ØªØ¹Ø·ÙŠÙ„ Ø§Ù„Ù…ÙˆØ±Ø¯ Ø¨Ù†Ø¬Ø§Ø­' })
+            res.json({ message: 'تم تعطيل المورد بنجاح' })
         } catch (error) {
             console.error('Delete supplier error:', error)
-            res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø­Ø°Ù Ø§Ù„Ù…ÙˆØ±Ø¯' })
+            res.status(500).json({ message: 'خطأ في حذف المورد' })
         }
     }
 )
@@ -314,8 +314,8 @@ router.post('/:id/payments',
     authenticate,
     authorize('admin', 'manager'),
     [
-        body('amount').isFloat({ min: 0.01 }).withMessage('Ø§Ù„Ù…Ø¨Ù„Øº ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø£ÙƒØ¨Ø± Ù…Ù† 0'),
-        body('payment_method').isIn(['cash', 'bank_transfer', 'check', 'card']).withMessage('Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹ ØºÙŠØ± ØµØ­ÙŠØ­Ø©'),
+        body('amount').isFloat({ min: 0.01 }).withMessage('المبلغ يجب أن يكون أكبر من 0'),
+        body('payment_method').isIn(['cash', 'bank_transfer', 'check', 'card']).withMessage('طريقة الدفع غير صحيحة'),
         body('payment_date').optional().isDate(),
         body('purchase_order_id').optional().isUUID(),
     ],
@@ -330,7 +330,7 @@ router.post('/:id/payments',
             const supplier = await Supplier.findByPk(req.params.id, { transaction: t })
             if (!supplier) {
                 await t.rollback()
-                return res.status(404).json({ message: 'Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+                return res.status(404).json({ message: 'المورد غير موجود' })
             }
 
             const { amount, payment_method, payment_date, reference, notes, purchase_order_id, payment_account_code } = req.body
@@ -383,14 +383,14 @@ router.post('/:id/payments',
             await t.commit()
 
             res.status(201).json({
-                message: 'ØªÙ… ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯ÙØ¹Ø© Ø¨Ù†Ø¬Ø§Ø­',
+                message: 'تم تسجيل الدفعة بنجاح',
                 data: payment
             })
 
         } catch (error) {
             await t.rollback()
             console.error('Create payment error:', error)
-            res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯ÙØ¹Ø©' })
+            res.status(500).json({ message: error.message || 'خطأ في تسجيل الدفعة' })
         }
     }
 )
@@ -409,7 +409,7 @@ router.get('/:id/gl-balance', authenticate, authorize('admin', 'manager'), async
     try {
         const supplier = await Supplier.findByPk(req.params.id)
         if (!supplier) {
-            return res.status(404).json({ message: 'Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            return res.status(404).json({ message: 'المورد غير موجود' })
         }
 
         const AccountingService = require('../services/accountingService')
@@ -434,7 +434,7 @@ router.get('/:id/gl-balance', authenticate, authorize('admin', 'manager'), async
         })
     } catch (error) {
         console.error('GL balance error:', error)
-        res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ Ø­Ø³Ø§Ø¨ Ø±ØµÙŠØ¯ Ø§Ù„Ù…ÙˆØ±Ø¯ Ù…Ù† Ø§Ù„Ø¯ÙØªØ±' })
+        res.status(500).json({ message: error.message || 'خطأ في حساب رصيد المورد من الدفتر' })
     }
 })
 
@@ -449,7 +449,7 @@ router.post('/:id/sync-balance', authenticate, authorize('admin'), async (req, r
     try {
         const supplier = await Supplier.findByPk(req.params.id)
         if (!supplier) {
-            return res.status(404).json({ message: 'Ø§Ù„Ù…ÙˆØ±Ø¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            return res.status(404).json({ message: 'المورد غير موجود' })
         }
 
         const AccountingService = require('../services/accountingService')
@@ -457,13 +457,13 @@ router.post('/:id/sync-balance', authenticate, authorize('admin'), async (req, r
 
         res.json({
             message: result.difference === 0
-                ? 'Ø§Ù„Ø±ØµÙŠØ¯ Ù…ØªÙˆØ§ÙÙ‚ Ù…Ø¹ Ø§Ù„Ø¯ÙØªØ±ØŒ Ù„Ø§ ØªØ¹Ø¯ÙŠÙ„ Ù…Ø·Ù„ÙˆØ¨ âœ…'
-                : `ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø±ØµÙŠØ¯ Ù…Ù† ${result.oldBalance} Ø¥Ù„Ù‰ ${result.newBalance} ðŸ”§`,
+                ? 'الرصيد متوافق مع الدفتر، لا يوجد تعديل مطلوب'
+                : `تم تحديث الرصيد من ${result.oldBalance} إلى ${result.newBalance}`,
             data: result
         })
     } catch (error) {
         console.error('Sync balance error:', error)
-        res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ Ù…Ø²Ø§Ù…Ù†Ø© Ø§Ù„Ø±ØµÙŠØ¯' })
+        res.status(500).json({ message: error.message || 'خطأ في مزامنة الرصيد' })
     }
 })
 

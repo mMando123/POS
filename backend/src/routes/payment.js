@@ -10,27 +10,175 @@
  * - Idempotency keys for payment confirmation
  * - Audit logging for all payment state changes
  * 
- * RULE: No order may ever be marked as PAID unless verified via
- * Paymob Server Callback (Webhook) with valid HMAC + matching amount.
- * Frontend success response is NEVER trusted.
+ * RULE: No order may ever be marked as PAID unless verified with a valid
+ * Paymob HMAC signature plus amount matching. Primary path is the server
+ * webhook; callback fallback is allowed only after the same verification.
  */
 
 const express = require('express')
 const router = express.Router()
 const { body } = require('express-validator')
+const { Op } = require('sequelize')
 const { validate } = require('../middleware/validate')
-const { authenticate, optionalAuth } = require('../middleware/auth')
+const { authenticate, optionalAuth, requirePermission, PERMISSIONS } = require('../middleware/auth')
 const { requireIdempotency } = require('../middleware/idempotency')
 const { paymentLimiter } = require('../middleware/rateLimiter')
 const { Order, PaymentGateway, AuditLog, sequelize } = require('../models')
 const AuditService = require('../services/auditService')
+const AccountingHooks = require('../services/accountingHooks')
 const logger = require('../services/logger')
 const paymobGateway = require('../services/gateways/paymob')
 const OrderPaymentService = require('../services/orderPaymentService')
+const { getPrintService } = require('../services/printService')
+const { loadSettings } = require('./settings')
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const hasBranchAccess = (user, branchId) => {
+    if (!user) return false
+    if (user.role === 'admin') return true
+    if (!user.branchId) return true
+    return String(user.branchId) === String(branchId || '')
+}
+
+const ensureConfirmationAudit = async ({
+    order,
+    action,
+    transactionId = null,
+    amountCents = null,
+    verification = null
+}) => {
+    if (!order?.id || !action) return false
+
+    const existing = await AuditLog.findOne({
+        where: {
+            category: 'order',
+            entity_id: String(order.id),
+            action: {
+                [Op.in]: ['payment_confirmed_webhook', 'payment_confirmed_callback']
+            }
+        },
+        attributes: ['id']
+    })
+    if (existing) return false
+
+    AuditService.log({
+        category: 'order',
+        action,
+        entityType: 'Order',
+        entityId: order.id,
+        branchId: order.branch_id || null,
+        metadata: {
+            transactionId,
+            amountCents,
+            gateway: 'paymob',
+            verification
+        }
+    })
+    return true
+}
+
+const postOnlinePaymentReceipt = async (order) => {
+    try {
+        await AccountingHooks.onOnlinePaymentConfirmed(order)
+    } catch (error) {
+        logger.error(`Failed to post online payment receipt for order ${order?.id}:`, error.message)
+    }
+}
+
+const getKitchenRoutingConfig = (settings = null) => {
+    const resolved = settings || loadSettings()
+    return {
+        kdsEnabled: resolved?.hardware?.enableKitchenDisplay === true,
+        printKitchenReceipt: resolved?.workflow?.printKitchenReceipt !== false
+    }
+}
+
+const emitToKdsRooms = (io, event, payload, kitchenConfig = null) => {
+    const config = kitchenConfig || getKitchenRoutingConfig()
+    if (!io || !config.kdsEnabled) return false
+
+    io.to('kds:all').emit(event, payload)
+    io.to('kds').emit(event, payload)
+    return true
+}
+
+const maybePrintOnlineKitchenTicket = async (req, order, kitchenConfig = null) => {
+    const config = kitchenConfig || getKitchenRoutingConfig()
+    if (!order || order.order_type !== 'online' || order.status !== 'approved') return false
+    if (config.kdsEnabled || !config.printKitchenReceipt) return false
+
+    try {
+        const printService = req.app.get('printService') || getPrintService()
+        if (!printService?.onOrderApproved) return false
+        await printService.onOrderApproved(order)
+        return true
+    } catch (error) {
+        logger.warn(`Paper kitchen print failed for order ${order.order_number}: ${error.message}`)
+        return false
+    }
+}
+
+const broadcastApprovedOnlineOrder = async (req, order) => {
+    if (!req?.app || !order || order.order_type !== 'online' || order.status !== 'approved') return false
+
+    const kitchenConfig = getKitchenRoutingConfig()
+    const io = req.app.get('io')
+    const notificationService = req.app.get('notificationService')
+
+    if (io) {
+        io.to(`branch:${order.branch_id}`).emit('order:updated', {
+            orderId: order.id,
+            status: order.status,
+            order
+        })
+        emitToKdsRooms(io, 'order:new', order, kitchenConfig)
+        io.to(`order:${order.id}`).emit('order:updated', {
+            orderId: order.id,
+            status: order.status,
+            order
+        })
+    }
+
+    await maybePrintOnlineKitchenTicket(req, order, kitchenConfig)
+
+    if (notificationService?.orderApproved) {
+        notificationService.orderApproved(order).catch((notifyErr) => {
+            logger.warn('Order approved notification failed:', notifyErr.message)
+        })
+    }
+
+    return true
+}
+
+const buildPaymobTransactionFromQuery = (query = {}) => ({
+    amount_cents: query.amount_cents,
+    created_at: query.created_at,
+    currency: query.currency,
+    error_occured: query.error_occured,
+    has_parent_transaction: query.has_parent_transaction,
+    id: query.id,
+    integration_id: query.integration_id,
+    is_3d_secure: query.is_3d_secure,
+    is_auth: query.is_auth,
+    is_capture: query.is_capture,
+    is_refunded: query.is_refunded,
+    is_standalone_payment: query.is_standalone_payment,
+    is_voided: query.is_voided,
+    order: query.order,
+    owner: query.owner,
+    pending: query.pending,
+    source_data: {
+        pan: query['source_data.pan'],
+        sub_type: query['source_data.sub_type'],
+        type: query['source_data.type']
+    },
+    success: query.success
+})
 
 // Initiate payment (unchanged logic, kept backward compatible)
 router.post('/initiate', optionalAuth, paymentLimiter, [
-    body('order_id').notEmpty().withMessage('Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ Ù…Ø·Ù„ÙˆØ¨'),
+    body('order_id').notEmpty().withMessage('رقم الطلب مطلوب'),
     body('gateway').optional(),
     validate
 ], async (req, res) => {
@@ -42,12 +190,23 @@ router.post('/initiate', optionalAuth, paymentLimiter, [
         })
 
         if (!order) {
-            return res.status(404).json({ message: 'Ø§Ù„Ø·Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            return res.status(404).json({ message: 'الطلب غير موجود' })
         }
 
-        // Security check: If guest, order must be online
-        if (!req.user && order.order_type !== 'online') {
-            return res.status(401).json({ message: 'ØºÙŠØ± Ù…ØµØ±Ø­ Ù„Ùƒ Ø¨Ø§Ù„Ø¯ÙØ¹ Ù„Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨' })
+        if (order.order_type !== 'online') {
+            return res.status(400).json({ message: 'تهيئة الدفع الإلكتروني متاحة للطلبات الأونلاين فقط' })
+        }
+
+        if (order.status === 'cancelled') {
+            return res.status(409).json({ message: 'لا يمكن بدء الدفع لطلب ملغي' })
+        }
+
+        if (order.payment_status === 'paid') {
+            return res.status(409).json({ message: 'تم دفع هذا الطلب بالفعل' })
+        }
+
+        if (!['online', 'card'].includes(String(order.payment_method || '').toLowerCase())) {
+            return res.status(400).json({ message: 'طريقة الدفع الحالية لا تتطلب بوابة دفع أونلاين' })
         }
 
         const paymentService = require('../services/paymentService')
@@ -56,7 +215,7 @@ router.post('/initiate', optionalAuth, paymentLimiter, [
         res.json({ data: result })
     } catch (error) {
         console.error('Initiate payment error:', error)
-        res.status(500).json({ message: error.message || 'Ø®Ø·Ø£ ÙÙŠ Ø¨Ø¯Ø¡ Ø§Ù„Ø¯ÙØ¹' })
+        res.status(500).json({ message: error.message || 'خطأ في بدء الدفع' })
     }
 })
 
@@ -81,11 +240,11 @@ router.post('/webhook', async (req, res) => {
         const transactionId = webhookData.id
         const amountCents = webhookData.amount_cents
 
-        logger.info(`ðŸ’³ Webhook received: success=${success}, merchantOrderId=${merchantOrderId}, txnId=${transactionId}`)
+        logger.info(`[payment webhook] received: success=${success}, merchantOrderId=${merchantOrderId}, txnId=${transactionId}`)
 
         if (!merchantOrderId) {
-            logger.warn('âš ï¸ Webhook missing merchant_order_id')
-            return res.json({ received: true, warning: 'Missing merchant_order_id' })
+            logger.warn('Webhook missing merchant_order_id')
+            return res.json({ received: true, warning: 'المعرّف merchant_order_id غير موجود' })
         }
 
         // ===== HMAC VERIFICATION =====
@@ -103,7 +262,7 @@ router.post('/webhook', async (req, res) => {
                 logger.error('Paymob webhook rejected: missing hmacSecret in production')
                 return res.status(503).json({
                     received: true,
-                    error: 'Webhook security not configured'
+                    error: 'إعدادات أمان الـ Webhook غير مكتملة'
                 })
             }
             logger.warn('WARNING: Paymob webhook accepted without HMAC (non-production or override enabled).')
@@ -112,7 +271,7 @@ router.post('/webhook', async (req, res) => {
                 logger.error(`HMAC missing for transaction ${transactionId}`)
                 return res.status(403).json({
                     received: true,
-                    error: 'Missing webhook HMAC signature'
+                    error: 'توقيع HMAC الخاص بالـ Webhook مفقود'
                 })
             }
 
@@ -133,7 +292,7 @@ router.post('/webhook', async (req, res) => {
                 })
                 return res.status(403).json({
                     received: true,
-                    error: 'HMAC verification failed - payment rejected'
+                    error: 'فشل التحقق من توقيع HMAC وتم رفض الدفع'
                 })
             }
 
@@ -147,15 +306,15 @@ router.post('/webhook', async (req, res) => {
         }
 
         if (!order) {
-            logger.error(`âŒ Webhook: Order not found for ${merchantOrderId}`)
-            return res.status(404).json({ received: true, error: 'Order not found' })
+            logger.error(`Webhook: Order not found for ${merchantOrderId}`)
+            return res.status(404).json({ received: true, error: 'الطلب غير موجود' })
         }
 
         // ===== AMOUNT VERIFICATION =====
         if (amountCents) {
             const amountMatch = paymobGateway.verifyAmount(amountCents, order.total)
             if (!amountMatch) {
-                logger.error(`ðŸš« Amount mismatch for Order #${order.order_number}: paid=${amountCents}, expected=${Math.round(order.total * 100)}`)
+                logger.error(`[payment webhook] amount mismatch for Order #${order.order_number}: paid=${amountCents}, expected=${Math.round(order.total * 100)}`)
                 AuditService.log({
                     category: 'order',
                     action: 'payment_amount_mismatch',
@@ -170,25 +329,40 @@ router.post('/webhook', async (req, res) => {
                 })
                 return res.status(400).json({
                     received: true,
-                    error: 'Amount mismatch - payment flagged for review'
+                    error: 'قيمة الدفع لا تطابق الطلب وتم تحويل العملية للمراجعة'
                 })
             }
         }
 
         // ===== IDEMPOTENCY CHECK (duplicate webhook protection) =====
         if (order.payment_status === 'paid' && success) {
-            logger.info(`â™»ï¸ Duplicate webhook for already-paid Order #${order.order_number}`)
+            logger.info(`Duplicate webhook for already-paid Order #${order.order_number}`)
             return res.json({ received: true, success: true, duplicate: true })
         }
 
         // ===== UPDATE ORDER =====
         if (success) {
-            await order.update({ payment_status: 'paid' })
+            const workflowSettings = loadSettings()?.workflow || {}
+            const autoApprovePaidOnline = order.order_type === 'online'
+                && order.status === 'pending'
+                && workflowSettings.autoAcceptOnline === true
+
+            const orderUpdate = { payment_status: 'paid' }
+            if (autoApprovePaidOnline) {
+                orderUpdate.status = 'approved'
+                orderUpdate.approved_at = new Date()
+            }
+
+            await order.update(orderUpdate)
             await OrderPaymentService.ensureRowsForPaidOrder(order, {
                 processedBy: null,
                 notes: `Auto-created from payment webhook txn=${transactionId || ''}`.trim()
             })
-            logger.info(`âœ… Payment confirmed for Order #${order.order_number}`)
+            await postOnlinePaymentReceipt(order)
+            if (autoApprovePaidOnline) {
+                await broadcastApprovedOnlineOrder(req, order)
+            }
+            logger.info(`[payment webhook] payment confirmed for Order #${order.order_number}`)
 
             // Audit the successful payment
             AuditService.log({
@@ -215,7 +389,7 @@ router.post('/webhook', async (req, res) => {
             }
         } else {
             await order.update({ payment_status: 'failed' })
-            logger.info(`âŒ Payment failed for Order #${order.order_number}`)
+            logger.info(`Payment failed for Order #${order.order_number}`)
 
             AuditService.log({
                 category: 'order',
@@ -229,91 +403,202 @@ router.post('/webhook', async (req, res) => {
         res.json({ received: true, success: true })
     } catch (error) {
         logger.error('Payment webhook error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø®Ø§Ø¯Ù…' })
+        res.status(500).json({ message: 'خطأ في الخادم' })
     }
 })
 
 /**
  * Verify payment callback (from frontend redirect)
  * 
- * IMPORTANT: This does NOT mark an order as paid.
- * It only checks if the webhook already did that.
- * Frontend success is NEVER trusted for marking payment.
+ * IMPORTANT:
+ * - Primary confirmation path is still the server-side webhook.
+ * - As a resilient fallback, a Paymob redirect may confirm payment only if
+ *   HMAC is valid and the paid amount matches the order total.
  */
 router.post('/verify', async (req, res) => {
     try {
         const { query } = req.body
-        const merchantOrderId = query?.merchant_order_id
+        const merchantOrderId = String(query?.merchant_order_id || '').trim()
 
         if (!merchantOrderId) {
-            return res.status(400).json({ message: 'Ù…Ø¹Ø±Ù Ø§Ù„Ø·Ù„Ø¨ Ù…ÙÙ‚ÙˆØ¯' })
+            return res.status(400).json({ message: 'معرف الطلب مفقود' })
         }
 
-        let order = await Order.findByPk(merchantOrderId)
-        if (!order) {
-            order = await Order.findOne({ where: { order_number: merchantOrderId } })
+        if (!UUID_PATTERN.test(merchantOrderId)) {
+            return res.status(400).json({ message: 'معرف الطلب غير صالح' })
         }
 
+        const order = await Order.findByPk(merchantOrderId, {
+            attributes: ['id', 'order_number', 'payment_status', 'payment_method', 'status', 'order_type', 'total', 'branch_id', 'shift_id', 'user_id']
+        })
+
         if (!order) {
-            return res.status(404).json({ message: 'Ø§Ù„Ø·Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯ (' + merchantOrderId + ')' })
+            return res.status(404).json({ message: 'الطلب غير موجود' })
+        }
+
+        const callbackSuccess = String(query?.success || '').toLowerCase() === 'true'
+        const callbackHmac = String(query?.hmac || '').trim()
+        let verifiedBy = 'webhook'
+
+        if (order.payment_status !== 'paid' && callbackSuccess && callbackHmac) {
+            const gatewayConfig = await PaymentGateway.findOne({
+                where: { name: 'paymob', is_active: true }
+            })
+
+            const hmacSecret = gatewayConfig?.settings?.hmacSecret || gatewayConfig?.settings?.hmac || ''
+            if (hmacSecret) {
+                const callbackTransaction = buildPaymobTransactionFromQuery(query)
+                const hmacValid = paymobGateway.verifyCallback(callbackTransaction, callbackHmac, hmacSecret)
+                const amountValid = hmacValid && paymobGateway.verifyAmount(query.amount_cents, order.total)
+
+                if (hmacValid && amountValid) {
+                    const workflowSettings = loadSettings()?.workflow || {}
+                    const autoApprovePaidOnline = order.order_type === 'online'
+                        && order.status === 'pending'
+                        && workflowSettings.autoAcceptOnline === true
+
+                    const orderUpdate = { payment_status: 'paid' }
+                    if (autoApprovePaidOnline) {
+                        orderUpdate.status = 'approved'
+                        orderUpdate.approved_at = new Date()
+                    }
+
+                    await order.update(orderUpdate)
+                    await OrderPaymentService.ensureRowsForPaidOrder(order, {
+                        processedBy: null,
+                        notes: `Auto-confirmed from payment callback txn=${query?.id || ''}`.trim()
+                    })
+                    await postOnlinePaymentReceipt(order)
+                    if (autoApprovePaidOnline) {
+                        await broadcastApprovedOnlineOrder(req, order)
+                    }
+
+                    await ensureConfirmationAudit({
+                        order,
+                        action: 'payment_confirmed_callback',
+                        transactionId: query?.id || null,
+                        amountCents: query?.amount_cents || null,
+                        verification: 'callback_hmac_verified'
+                    })
+
+                    const io = req.app.get('io')
+                    if (io) {
+                        io.to(`order:${order.id}`).emit('payment:confirmed', {
+                            orderId: order.id,
+                            status: 'paid'
+                        })
+                        io.emit('order:paid', order)
+                    }
+
+                    verifiedBy = 'callback_hmac'
+                    logger.info(`[payment verify] fallback confirmation accepted for Order #${order.order_number}, txnId=${query?.id || ''}`)
+                } else {
+                    logger.warn(`[payment verify] callback verification failed for Order #${order.order_number}, txnId=${query?.id || ''}`)
+                }
+            } else {
+                logger.warn('[payment verify] paymob hmacSecret missing, callback fallback skipped')
+            }
+        }
+
+        if (order.payment_status === 'paid' && callbackSuccess && callbackHmac && verifiedBy !== 'callback_hmac') {
+            const gatewayConfig = await PaymentGateway.findOne({
+                where: { name: 'paymob', is_active: true }
+            })
+
+            const hmacSecret = gatewayConfig?.settings?.hmacSecret || gatewayConfig?.settings?.hmac || ''
+            if (hmacSecret) {
+                const callbackTransaction = buildPaymobTransactionFromQuery(query)
+                const hmacValid = paymobGateway.verifyCallback(callbackTransaction, callbackHmac, hmacSecret)
+                const amountValid = hmacValid && paymobGateway.verifyAmount(query.amount_cents, order.total)
+
+                if (hmacValid && amountValid) {
+                    verifiedBy = 'callback_hmac'
+                    await ensureConfirmationAudit({
+                        order,
+                        action: 'payment_confirmed_callback',
+                        transactionId: query?.id || null,
+                        amountCents: query?.amount_cents || null,
+                        verification: 'callback_hmac_verified'
+                    })
+                }
+            }
         }
 
         // Return the CURRENT payment status from our DB
-        // DO NOT update payment_status here based on frontend query params
         if (order.payment_status === 'paid') {
-            // Already confirmed by webhook
+            await OrderPaymentService.ensureRowsForPaidOrder(order, {
+                processedBy: null,
+                notes: `Auto-repaired payment row from verify txn=${query?.id || ''}`.trim()
+            })
+            await postOnlinePaymentReceipt(order)
+
             return res.json({
                 success: true,
-                message: 'ØªÙ… ØªØ£ÙƒÙŠØ¯ Ø§Ù„Ø¯ÙØ¹',
-                data: order,
-                verified_by: 'webhook'
+                message: 'تم تأكيد الدفع',
+                data: {
+                    orderId: order.id,
+                    payment_status: order.payment_status,
+                    payment_method: order.payment_method,
+                    status: order.status
+                },
+                verified_by: verifiedBy
             })
         }
 
-        // Payment not yet confirmed by webhook â€” tell frontend to wait
+        // Payment not yet confirmed by webhook - tell frontend to wait
         return res.json({
             success: false,
-            message: 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø¯ÙØ¹... ÙŠØ±Ø¬Ù‰ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø±',
-            data: order,
+            message: 'جارٍ التحقق من الدفع... يرجى الانتظار',
+            data: {
+                orderId: order.id,
+                payment_status: order.payment_status,
+                payment_method: order.payment_method,
+                status: order.status
+            },
             payment_status: order.payment_status,
-            note: 'Payment verification is done server-side via webhook. Please poll /status endpoint.'
+            note: 'يتم التحقق من الدفع من الخادم عبر Webhook. يرجى إعادة الاستعلام من endpoint /status.'
         })
 
     } catch (error) {
         console.error('Verify payment error:', error)
-        res.status(500).json({ message: 'ÙØ´Ù„ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø¯ÙØ¹' })
+        res.status(500).json({ message: 'فشل التحقق من الدفع' })
     }
 })
 
 // Get payment status
 router.get('/status/:orderId', async (req, res) => {
     try {
+        if (!UUID_PATTERN.test(String(req.params.orderId || '').trim())) {
+            return res.status(400).json({ message: 'معرف الطلب غير صالح' })
+        }
+
         const order = await Order.findByPk(req.params.orderId, {
             attributes: ['id', 'payment_status', 'payment_method', 'total', 'status']
         })
 
         if (!order) {
-            return res.status(404).json({ message: 'Ø§Ù„Ø·Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' })
+            return res.status(404).json({ message: 'الطلب غير موجود' })
         }
 
         res.json({ data: order })
     } catch (error) {
         console.error('Get payment status error:', error)
-        res.status(500).json({ message: 'Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø®Ø§Ø¯Ù…' })
+        res.status(500).json({ message: 'خطأ في الخادم' })
     }
 })
 
 /**
  * Manual payment confirmation (for cash/card at POS)
  * 
- * SECURED: Requires authentication (was previously unauthenticated â€” CRITICAL FIX)
+ * SECURED: Requires authentication (was previously unauthenticated - CRITICAL FIX)
  * IDEMPOTENT: Requires X-Idempotency-Key header
  */
 router.post('/:orderId/confirm',
     authenticate,  // <- CRITICAL FIX: Was missing, allowing anyone to mark orders as paid
+    requirePermission(PERMISSIONS.PAYMENT_PROCESS),
     requireIdempotency({ required: true, endpointName: 'payment_confirm' }),
     [
-        body('payment_method').isIn(['cash', 'card', 'online', 'multi']).withMessage('Invalid payment method'),
+        body('payment_method').isIn(['cash', 'card', 'online', 'multi']).withMessage('طريقة الدفع غير صالحة'),
         validate
     ],
     async (req, res) => {
@@ -331,6 +616,11 @@ router.post('/:orderId/confirm',
             if (!order) {
                 await transaction.rollback()
                 return res.status(404).json({ message: 'Order not found' })
+            }
+
+            if (!hasBranchAccess(req.user, order.branch_id)) {
+                await transaction.rollback()
+                return res.status(403).json({ message: 'غير مصرح لك بهذا الإجراء' })
             }
 
             // Prevent double-payment
@@ -366,6 +656,8 @@ router.post('/:orderId/confirm',
                 notes: 'Manual payment confirmation'
             })
 
+            await AccountingHooks.onOnlinePaymentConfirmed(order, { transaction })
+
             await transaction.commit()
 
             // Audit log
@@ -395,7 +687,7 @@ router.post('/:orderId/confirm',
                 await transaction.rollback()
             }
             console.error('Confirm payment error:', error)
-            res.status(500).json({ message: error.message || 'Server error' })
+            res.status(500).json({ message: error.message || 'خطأ في الخادم' })
         }
     }
 )

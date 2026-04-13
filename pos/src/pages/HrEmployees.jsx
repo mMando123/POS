@@ -4,6 +4,7 @@ import {
     Typography,
     Paper,
     Stack,
+    Grid,
     TextField,
     MenuItem,
     Button,
@@ -58,6 +59,18 @@ const statusLabel = {
     terminated: 'منتهي'
 }
 
+const MetricCard = ({ title, value, subtitle, color = '#1976d2' }) => (
+    <Paper sx={{ p: 2.25, borderRadius: 2, borderInlineStart: `4px solid ${color}`, height: '100%' }}>
+        <Typography variant="body2" color="text.secondary">{title}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.75 }}>{value}</Typography>
+        {subtitle && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                {subtitle}
+            </Typography>
+        )}
+    </Paper>
+)
+
 export default function HrEmployees() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -76,6 +89,21 @@ export default function HrEmployees() {
         if (!form.department_id) return designations
         return designations.filter((d) => d.department_id === form.department_id)
     }, [designations, form.department_id])
+
+    const employeeInsights = useMemo(() => {
+        const activeCount = rows.filter((row) => row.status === 'active').length
+        const linkedUsers = rows.filter((row) => row.userAccount?.id).length
+        const deliveryCount = rows.filter((row) => row.deliveryProfile?.is_active).length
+        const onLeaveCount = rows.filter((row) => row.status === 'on_leave').length
+
+        return {
+            total: rows.length,
+            activeCount,
+            linkedUsers,
+            deliveryCount,
+            onLeaveCount
+        }
+    }, [rows])
 
     const fetchData = useCallback(async () => {
         try {
@@ -173,7 +201,43 @@ export default function HrEmployees() {
 
             {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-            <Paper sx={{ p: 2, mb: 2 }}>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="إجمالي الموظفين"
+                        value={employeeInsights.total}
+                        subtitle="السجلات الظاهرة حسب الفلتر الحالي"
+                        color="#1565c0"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="الموظفون النشطون"
+                        value={employeeInsights.activeCount}
+                        subtitle={`في إجازة: ${employeeInsights.onLeaveCount}`}
+                        color="#2e7d32"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="حسابات مرتبطة"
+                        value={employeeInsights.linkedUsers}
+                        subtitle="موظفون مرتبطون بمستخدم نظام"
+                        color="#00838f"
+                    />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                    <MetricCard
+                        title="موظفو التوصيل"
+                        value={employeeInsights.deliveryCount}
+                        subtitle="الحسابات المفعلة كدليفري"
+                        color="#ef6c00"
+                    />
+                </Grid>
+            </Grid>
+
+            <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>فلاتر الموظفين</Typography>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                     <TextField
                         label="بحث (كود/اسم/هاتف/إيميل)"
@@ -197,7 +261,13 @@ export default function HrEmployees() {
                 </Stack>
             </Paper>
 
-            <Paper sx={{ overflowX: 'auto' }}>
+            <Paper sx={{ overflowX: 'auto', borderRadius: 2 }}>
+                <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>سجل الموظفين</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {employeeInsights.total} موظف | النشطون {employeeInsights.activeCount} | المرتبطون بالنظام {employeeInsights.linkedUsers}
+                    </Typography>
+                </Box>
                 {loading ? (
                     <Box sx={{ p: 5, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>
                 ) : (

@@ -234,9 +234,9 @@ async function runScenario(client, menuItem, rider, scenario) {
         await safeAssignRider(client, created.id, rider.id)
         await safePickup(client, created.id)
         await safeDeliveryComplete(client, created.id)
+    } else {
+        await finalizeOrder(client, created.id)
     }
-
-    await finalizeOrder(client, created.id)
     await sleep(150)
     const finalOrder = await fetchOrder(client, created.id)
 

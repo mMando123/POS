@@ -5,6 +5,13 @@ const { authenticate, authorize } = require('../middleware/auth')
 
 const SECRET_MASK = '********'
 
+const GATEWAY_METADATA = {
+    stripe: { display_name_ar: 'سترايب', display_name_en: 'Stripe', supported_methods: ['card', 'apple_pay'] },
+    moyasar: { display_name_ar: 'ميسر', display_name_en: 'Moyasar', supported_methods: ['mada', 'visa', 'mastercard', 'apple_pay'] },
+    fawry: { display_name_ar: 'فوري', display_name_en: 'Fawry', supported_methods: ['cash', 'card', 'wallet'] },
+    paymob: { display_name_ar: 'باي موب', display_name_en: 'Paymob', supported_methods: ['card', 'wallet', 'kiosk'] }
+}
+
 const SENSITIVE_BY_GATEWAY = {
     stripe: new Set(['secretKey', 'webhookSecret']),
     moyasar: new Set(['secretKey']),
@@ -45,8 +52,21 @@ const normalizeGatewaySettings = (gatewayName, settings) => {
     return normalized
 }
 
-const sanitizeGatewayForResponse = (gatewayLike) => {
+const applyGatewayMetadata = (gatewayLike) => {
     const gateway = typeof gatewayLike.toJSON === 'function' ? gatewayLike.toJSON() : { ...gatewayLike }
+    const metadata = GATEWAY_METADATA[gateway.name]
+
+    if (!metadata) return gateway
+
+    gateway.display_name_ar = metadata.display_name_ar
+    gateway.display_name_en = metadata.display_name_en
+    gateway.supported_methods = metadata.supported_methods
+
+    return gateway
+}
+
+const sanitizeGatewayForResponse = (gatewayLike) => {
+    const gateway = applyGatewayMetadata(gatewayLike)
     const settings = normalizeGatewaySettings(gateway.name, gateway.settings)
     const sensitiveKeys = SENSITIVE_BY_GATEWAY[gateway.name] || new Set()
     const allowedKeys = ALLOWED_SETTINGS_BY_GATEWAY[gateway.name] || new Set(Object.keys(settings))
@@ -147,7 +167,7 @@ router.get('/active', async (req, res) => {
             where: { is_active: true },
             attributes: ['id', 'name', 'display_name_ar', 'display_name_en', 'is_sandbox', 'supported_methods']
         })
-        res.json({ data: gateways })
+        res.json({ data: gateways.map(applyGatewayMetadata) })
     } catch (error) {
         console.error('Get active gateways error:', error)
         res.status(500).json({ message: 'Failed to fetch active payment methods' })
@@ -157,18 +177,15 @@ router.get('/active', async (req, res) => {
 // Initialize default gateways if not exist
 router.post('/init', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const defaults = [
-            { name: 'stripe', display_name_ar: 'سترايب', display_name_en: 'Stripe', supported_methods: ['card', 'apple_pay'] },
-            { name: 'moyasar', display_name_ar: 'ميسر', display_name_en: 'Moyasar', supported_methods: ['mada', 'visa', 'mastercard', 'apple_pay'] },
-            { name: 'fawry', display_name_ar: 'فوري', display_name_en: 'Fawry', supported_methods: ['cash', 'card', 'wallet'] },
-            { name: 'paymob', display_name_ar: 'باي موب', display_name_en: 'Paymob', supported_methods: ['card', 'wallet', 'kiosk'] }
-        ]
-
-        for (const gw of defaults) {
-            await PaymentGateway.findOrCreate({
-                where: { name: gw.name },
-                defaults: gw
+        for (const [name, metadata] of Object.entries(GATEWAY_METADATA)) {
+            const [gateway, created] = await PaymentGateway.findOrCreate({
+                where: { name },
+                defaults: { name, ...metadata }
             })
+
+            if (!created) {
+                await gateway.update(metadata)
+            }
         }
 
         res.json({ message: 'Default payment gateways initialized' })

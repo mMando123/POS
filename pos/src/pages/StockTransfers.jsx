@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
     Box,
     Typography,
@@ -25,7 +25,9 @@ import {
     StepLabel,
     Divider,
     Autocomplete,
-    Tooltip
+    Tooltip,
+    Stack,
+    InputAdornment
 } from '@mui/material'
 import {
     Add as AddIcon,
@@ -34,9 +36,10 @@ import {
     SwapHoriz as TransferIcon,
     Check as CheckIcon,
     Cancel as CancelIcon,
-    LocalShipping as ShippingIcon
+    LocalShipping as ShippingIcon,
+    QrCodeScanner as ScannerIcon
 } from '@mui/icons-material'
-import { transferAPI, warehouseAPI, menuAPI, inventoryAPI } from '../services/api'
+import { transferAPI, warehouseAPI, inventoryAPI } from '../services/api'
 import { format } from 'date-fns'
 import { arSA } from 'date-fns/locale'
 
@@ -48,6 +51,9 @@ export default function StockTransfers() {
     const [warehouses, setWarehouses] = useState([])
     const [products, setProducts] = useState([])
     const [stockLevels, setStockLevels] = useState({})
+    const [bulkScanInput, setBulkScanInput] = useState('')
+    const [bulkScanQuantity, setBulkScanQuantity] = useState(1)
+    const [bulkScanFeedback, setBulkScanFeedback] = useState({ severity: 'info', message: '', misses: [], stockIssues: [] })
 
     // Dialog states
     const [openCreate, setOpenCreate] = useState(false)
@@ -89,7 +95,7 @@ export default function StockTransfers() {
         try {
             const [warehousesRes, productsRes] = await Promise.all([
                 warehouseAPI.getAll(),
-                menuAPI.getAll()
+                inventoryAPI.getProducts({ track_stock: 'true' })
             ])
             setWarehouses(warehousesRes.data.data || warehousesRes.data || [])
             setProducts(productsRes.data.data || productsRes.data || [])
@@ -134,6 +140,174 @@ export default function StockTransfers() {
         }
     }, [newTransfer.from_warehouse_id])
 
+    const totalTransferLines = newTransfer.items.length
+    const totalTransferQuantity = newTransfer.items.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0)
+
+    const productLookup = useMemo(() => {
+        const barcodeMap = new Map()
+        const skuMap = new Map()
+        const exactMap = new Map()
+
+        for (const product of products) {
+            const barcode = String(product?.barcode || '').trim().toLowerCase()
+            const sku = String(product?.sku || '').trim().toLowerCase()
+            const nameAr = String(product?.name_ar || '').trim().toLowerCase()
+            const nameEn = String(product?.name_en || '').trim().toLowerCase()
+
+            if (barcode) barcodeMap.set(barcode, product)
+            if (sku) skuMap.set(sku, product)
+            if (nameAr) exactMap.set(nameAr, product)
+            if (nameEn) exactMap.set(nameEn, product)
+        }
+
+        return { barcodeMap, skuMap, exactMap }
+    }, [products])
+
+    const resolveProductFromScanToken = useCallback((rawToken) => {
+        const token = String(rawToken || '').trim()
+        if (!token) return null
+
+        const normalized = token.toLowerCase()
+        const exactBarcode = productLookup.barcodeMap.get(normalized)
+        if (exactBarcode) return exactBarcode
+
+        const exactSku = productLookup.skuMap.get(normalized)
+        if (exactSku) return exactSku
+
+        const exactName = productLookup.exactMap.get(normalized)
+        if (exactName) return exactName
+
+        const partialMatches = products.filter((product) => {
+            const haystack = [
+                product?.name_ar,
+                product?.name_en,
+                product?.sku,
+                product?.barcode
+            ].filter(Boolean).join(' ').toLowerCase()
+
+            return haystack.includes(normalized)
+        })
+
+        return partialMatches.length === 1 ? partialMatches[0] : null
+    }, [productLookup, products])
+
+    const addTransferItemByProduct = useCallback((product, requestedQuantity = 1) => {
+        const available = parseFloat(stockLevels[product.id] || 0) || 0
+        const quantityToAdd = Math.max(0.01, parseFloat(requestedQuantity) || 1)
+
+        if (available <= 0) {
+            return { status: 'insufficient_stock', available }
+        }
+
+        const existingIndex = newTransfer.items.findIndex((item) => item.menu_id === product.id)
+        if (existingIndex >= 0) {
+            const nextQuantity = (parseFloat(newTransfer.items[existingIndex]?.quantity || 0) || 0) + quantityToAdd
+            if (nextQuantity > available) {
+                return { status: 'insufficient_stock', available }
+            }
+
+            setNewTransfer((prev) => ({
+                ...prev,
+                items: prev.items.map((item, index) => (
+                    index === existingIndex ? { ...item, quantity: nextQuantity, available } : item
+                ))
+            }))
+            return { status: 'incremented', available }
+        }
+
+        if (quantityToAdd > available) {
+            return { status: 'insufficient_stock', available }
+        }
+
+        setNewTransfer((prev) => ({
+            ...prev,
+            items: [...prev.items, {
+                menu_id: product.id,
+                quantity: quantityToAdd,
+                productName: product?.name_ar || '',
+                available,
+                sku: product?.sku || '',
+                barcode: product?.barcode || ''
+            }]
+        }))
+
+        return { status: 'added', available }
+    }, [newTransfer.items, stockLevels])
+
+    const parseBulkScanEntries = useCallback((rawValue, defaultQuantity) => {
+        const normalizedValue = String(rawValue || '').trim()
+        if (!normalizedValue) return []
+
+        const hasBatchSeparators = /[\n,،;]/.test(normalizedValue)
+        const rawEntries = hasBatchSeparators
+            ? normalizedValue.split(/[\n,،;]+/)
+            : [normalizedValue]
+
+        return rawEntries
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .map((entry) => {
+                const qtyMatch = entry.match(/^(.*?)(?:\s*[*xX]\s*(\d+(?:\.\d+)?))$/)
+                if (qtyMatch) {
+                    return {
+                        token: qtyMatch[1].trim(),
+                        quantity: Math.max(0.01, parseFloat(qtyMatch[2]) || 1)
+                    }
+                }
+
+                return {
+                    token: entry,
+                    quantity: hasBatchSeparators ? 1 : Math.max(0.01, parseFloat(defaultQuantity) || 1)
+                }
+            })
+    }, [])
+
+    const handleBulkScanSubmit = useCallback(() => {
+        if (!newTransfer.from_warehouse_id) {
+            setError('اختر المستودع المصدر أولًا قبل المسح السريع')
+            return
+        }
+
+        const entries = parseBulkScanEntries(bulkScanInput, bulkScanQuantity)
+        if (!entries.length) return
+
+        let addedCount = 0
+        let incrementedCount = 0
+        const misses = []
+        const stockIssues = []
+
+        for (const entry of entries) {
+            const product = resolveProductFromScanToken(entry.token)
+            if (!product) {
+                misses.push(entry.token)
+                continue
+            }
+
+            const result = addTransferItemByProduct(product, entry.quantity)
+            if (result.status === 'incremented') incrementedCount += 1
+            else if (result.status === 'added') addedCount += 1
+            else stockIssues.push(`${product.name_ar} (المتاح ${result.available})`)
+        }
+
+        const messageParts = []
+        if (addedCount) messageParts.push(`تمت إضافة ${addedCount} صنف`)
+        if (incrementedCount) messageParts.push(`تمت زيادة ${incrementedCount} سطر`)
+        if (misses.length) messageParts.push(`تعذر العثور على ${misses.length} كود`)
+        if (stockIssues.length) messageParts.push(`يوجد ${stockIssues.length} صنف بدون رصيد كافٍ`)
+
+        const severity = (misses.length || stockIssues.length)
+            ? (addedCount || incrementedCount ? 'warning' : 'error')
+            : 'success'
+        const message = messageParts.join(' - ') || 'لم يتم تنفيذ أي إضافة'
+
+        setBulkScanFeedback({ severity, message, misses, stockIssues })
+        setError(null)
+        setBulkScanInput('')
+        if (!/[\n,،;]/.test(String(bulkScanInput || '').trim())) {
+            setBulkScanQuantity(1)
+        }
+    }, [addTransferItemByProduct, bulkScanInput, bulkScanQuantity, newTransfer.from_warehouse_id, parseBulkScanEntries, resolveProductFromScanToken])
+
     const handleOpenCreate = () => {
         setNewTransfer({
             from_warehouse_id: warehouses[0]?.id || '',
@@ -141,6 +315,10 @@ export default function StockTransfers() {
             notes: '',
             items: []
         })
+        setNewItem({ menu_id: '', quantity: 1 })
+        setBulkScanInput('')
+        setBulkScanQuantity(1)
+        setBulkScanFeedback({ severity: 'info', message: '', misses: [], stockIssues: [] })
         setOpenCreate(true)
     }
 
@@ -148,21 +326,18 @@ export default function StockTransfers() {
         if (!newItem.menu_id || newItem.quantity <= 0) return
 
         const product = products.find(p => p.id === newItem.menu_id)
-        const available = stockLevels[newItem.menu_id] || 0
-
-        if (newItem.quantity > available) {
-            setError(`الكمية المطلوبة (${newItem.quantity}) أكبر من المتوفر (${available})`)
+        if (!product) {
+            setError('الصنف المحدد غير موجود')
             return
         }
 
-        setNewTransfer(prev => ({
-            ...prev,
-            items: [...prev.items, {
-                ...newItem,
-                productName: product?.name_ar || '',
-                available
-            }]
-        }))
+        const result = addTransferItemByProduct(product, newItem.quantity)
+        if (result.status === 'insufficient_stock') {
+            setError(`الكمية المطلوبة (${newItem.quantity}) أكبر من المتوفر (${result.available})`)
+            return
+        }
+
+        setError(null)
         setNewItem({ menu_id: '', quantity: 1 })
     }
 
@@ -185,7 +360,15 @@ export default function StockTransfers() {
                 return
             }
 
-            await transferAPI.create(newTransfer)
+            const payload = {
+                ...newTransfer,
+                items: newTransfer.items.map((item) => ({
+                    menu_id: item.menu_id,
+                    quantity: parseFloat(item.quantity)
+                }))
+            }
+
+            await transferAPI.create(payload)
             setOpenCreate(false)
             fetchTransfers()
         } catch (err) {
@@ -353,7 +536,13 @@ export default function StockTransfers() {
                             select
                             label="من المستودع"
                             value={newTransfer.from_warehouse_id}
-                            onChange={(e) => setNewTransfer({ ...newTransfer, from_warehouse_id: e.target.value, items: [] })}
+                            onChange={(e) => {
+                                setNewTransfer({ ...newTransfer, from_warehouse_id: e.target.value, items: [] })
+                                setNewItem({ menu_id: '', quantity: 1 })
+                                setBulkScanInput('')
+                                setBulkScanQuantity(1)
+                                setBulkScanFeedback({ severity: 'info', message: '', misses: [], stockIssues: [] })
+                            }}
                             required
                         >
                             {warehouses.map(w => (
@@ -371,9 +560,104 @@ export default function StockTransfers() {
                                 .filter(w => w.id !== newTransfer.from_warehouse_id)
                                 .map(w => (
                                     <MenuItem key={w.id} value={w.id}>{w.nameAr || w.name_ar}</MenuItem>
-                                ))}
+                            ))}
                         </TextField>
                     </Box>
+
+                    <Paper
+                        variant="outlined"
+                        sx={{
+                            p: 2,
+                            mb: 3,
+                            borderStyle: 'dashed',
+                            borderColor: 'primary.light',
+                            bgcolor: 'primary.50'
+                        }}
+                    >
+                        <Stack
+                            direction={{ xs: 'column', md: 'row' }}
+                            spacing={2}
+                            alignItems={{ xs: 'stretch', md: 'center' }}
+                            justifyContent="space-between"
+                            sx={{ mb: 1.5 }}
+                        >
+                            <Box>
+                                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <ScannerIcon color="primary" />
+                                    وضعية الإدخال السريع للتحويل
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    امسح الباركود أو أدخل SKU أو اسم الصنف، وسيتم دمج السطر تلقائيًا إذا كان موجودًا بالفعل داخل التحويل.
+                                </Typography>
+                            </Box>
+                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                                <Chip color="primary" variant="outlined" label={`${totalTransferLines} سطر`} />
+                                <Chip color="success" variant="outlined" label={`${totalTransferQuantity} إجمالي الكمية`} />
+                            </Stack>
+                        </Stack>
+
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                            <TextField
+                                label="مسح باركود / SKU / اسم الصنف"
+                                value={bulkScanInput}
+                                onChange={(e) => setBulkScanInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        handleBulkScanSubmit()
+                                    }
+                                }}
+                                placeholder="مثال: 123456789 أو SKU-001 أو عدة أكواد كل سطر"
+                                fullWidth
+                                disabled={!newTransfer.from_warehouse_id}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <ScannerIcon fontSize="small" color="action" />
+                                        </InputAdornment>
+                                    )
+                                }}
+                                helperText="يمكن لصق عدة أكواد مفصولة بسطر جديد أو فاصلة، ويمكن استخدام CODE*5 لإضافة كمية مباشرة"
+                            />
+                            <TextField
+                                label="الكمية"
+                                type="number"
+                                value={bulkScanQuantity}
+                                onChange={(e) => setBulkScanQuantity(e.target.value)}
+                                inputProps={{ min: 0.01, step: 1 }}
+                                sx={{ minWidth: { xs: '100%', md: 120 } }}
+                                disabled={!newTransfer.from_warehouse_id}
+                            />
+                            <Button
+                                variant="contained"
+                                onClick={handleBulkScanSubmit}
+                                disabled={!bulkScanInput.trim() || !newTransfer.from_warehouse_id}
+                                sx={{ minWidth: { xs: '100%', md: 160 } }}
+                            >
+                                إضافة مباشرة
+                            </Button>
+                        </Stack>
+
+                        {bulkScanFeedback.message && (
+                            <Alert
+                                severity={bulkScanFeedback.severity}
+                                sx={{ mt: 1.5 }}
+                                onClose={() => setBulkScanFeedback({ severity: 'info', message: '', misses: [], stockIssues: [] })}
+                            >
+                                <Typography variant="body2">{bulkScanFeedback.message}</Typography>
+                                {bulkScanFeedback.misses.length > 0 && (
+                                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                                        الأكواد غير المعروفة: {bulkScanFeedback.misses.join('، ')}
+                                    </Typography>
+                                )}
+                                {bulkScanFeedback.stockIssues.length > 0 && (
+                                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                                        أصناف بدون رصيد كافٍ: {bulkScanFeedback.stockIssues.join('، ')}
+                                    </Typography>
+                                )}
+                            </Alert>
+                        )}
+                    </Paper>
 
                     <Divider sx={{ my: 2 }} />
 
@@ -391,6 +675,36 @@ export default function StockTransfers() {
                             isOptionEqualToValue={(option, value) => option.id === value.id}
                             value={products.find(p => p.id === newItem.menu_id) || null}
                             onChange={(e, val) => setNewItem({ ...newItem, menu_id: val?.id || '' })}
+                            filterOptions={(options, params) => {
+                                const search = String(params.inputValue || '').toLowerCase()
+                                return options.filter((opt) => {
+                                    const label = [
+                                        opt.name_ar || '',
+                                        opt.name_en || '',
+                                        opt.sku || '',
+                                        opt.barcode || ''
+                                    ].join(' ').toLowerCase()
+                                    return label.includes(search)
+                                })
+                            }}
+                            renderOption={(props, option) => {
+                                const stock = stockLevels[option.id] || 0
+                                return (
+                                    <li {...props} key={option.id}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                            <Box>
+                                                <Typography>{option.name_ar}</Typography>
+                                                {(option.sku || option.barcode) && (
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {[option.sku, option.barcode].filter(Boolean).join(' - ')}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                            <Chip size="small" label={`المتاح: ${stock}`} color={stock > 0 ? 'success' : 'default'} variant="outlined" />
+                                        </Box>
+                                    </li>
+                                )
+                            }}
                             renderInput={(params) => <TextField {...params} label="المنتج" size="small" />}
                             sx={{ minWidth: 300 }}
                             disabled={!newTransfer.from_warehouse_id}
@@ -437,7 +751,14 @@ export default function StockTransfers() {
                                 <TableBody>
                                     {newTransfer.items.map((item, idx) => (
                                         <TableRow key={idx}>
-                                            <TableCell>{item.productName}</TableCell>
+                                            <TableCell>
+                                                <Typography fontWeight="bold">{item.productName}</Typography>
+                                                {(item.sku || item.barcode) && (
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {[item.sku, item.barcode].filter(Boolean).join(' - ')}
+                                                    </Typography>
+                                                )}
+                                            </TableCell>
                                             <TableCell>{item.available}</TableCell>
                                             <TableCell>{item.quantity}</TableCell>
                                             <TableCell>

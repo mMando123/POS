@@ -79,6 +79,12 @@ const Menu = sequelize.define('Menu', {
         type: DataTypes.STRING(20),
         defaultValue: 'piece',
         comment: 'e.g., kg, liter, piece, box'
+    },
+    option_groups: {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: [],
+        comment: 'Modifiers / variants configuration for POS ordering'
     }
 }, {
     tableName: 'menu',

@@ -135,6 +135,8 @@ export const authAPI = {
 export const menuAPI = {
     getAll: (params) => api.get('/menu', { params }),
     getById: (id) => api.get(`/menu/${id}`),
+    getNextBarcode: () => api.get('/menu/barcode/next'),
+    generateBarcodes: (data) => api.post('/menu/barcode/bulk-generate', data),
     create: (data) => api.post('/menu', data),
     update: (id, data) => api.put(`/menu/${id}`, data),
     delete: (id) => api.delete(`/menu/${id}`),
@@ -167,7 +169,14 @@ export const orderAPI = {
     getAll: (params) => api.get('/orders', { params }),
     getById: (id) => api.get(`/orders/${id}`),
     getStockBatches: (menuId, params = {}) => api.get(`/orders/stock-batches/${menuId}`, { params }),
-    create: (data) => api.post('/orders', data),
+    create: (data) => {
+        const selectedWarehouseId = localStorage.getItem('pos_selected_warehouse_id')
+        const payload = { ...(data || {}) }
+        if (!payload.warehouse_id && selectedWarehouseId) {
+            payload.warehouse_id = selectedWarehouseId
+        }
+        return api.post('/orders', payload)
+    },
     updateStatus: (id, status, data = {}) => api.put(`/orders/${id}/status`, { status, ...data }),
     cancel: (id, reason) => api.post(`/orders/${id}/cancel`, { reason }),
     getActiveForKDS: () => api.get('/orders/kds/active'),
@@ -305,6 +314,13 @@ export const notificationsAPI = {
     cleanup: () => api.delete('/notifications/cleanup'),
 }
 
+// Audit / Activity Feed API
+export const auditAPI = {
+    getFeed: (params) => api.get('/audit/feed', { params }),
+    getAll: (params) => api.get('/audit', { params }),
+    getEntityTrail: (type, id, params) => api.get(`/audit/entity/${type}/${id}`, { params }),
+}
+
 // ==================== INVENTORY MODULE ====================
 
 // Inventory API (Stock Management)
@@ -315,6 +331,7 @@ export const inventoryAPI = {
     getAlerts: (params) => api.get('/inventory/alerts', { params }),
     getLowStock: (params) => api.get('/inventory/alerts', { params }),
     getValuation: (params) => api.get('/inventory/valuation', { params }),
+    getBranchSummary: (params) => api.get('/inventory/branch-summary', { params }),
     getMovements: (params) => api.get('/inventory/movements', { params }),
 
     // Stock operations
@@ -351,6 +368,7 @@ export const purchaseAPI = {
 // Stock Transfer API
 export const transferAPI = {
     getAll: (params) => api.get('/transfers', { params }),
+    getSummary: (params) => api.get('/transfers/reports/summary', { params }),
     getById: (id) => api.get(`/transfers/${id}`),
     create: (data) => api.post('/transfers', data),
     complete: (id) => api.post(`/transfers/${id}/complete`),
@@ -540,7 +558,7 @@ export const hrAPI = {
     getSalaryById: (id) => api.get(`/hr/payroll/salaries/${id}`),
     updateSalary: (id, data) => api.put(`/hr/payroll/salaries/${id}`, data),
     approvePayroll: (salaryIds) => api.post('/hr/payroll/approve', { salary_ids: salaryIds }),
-    disbursePayroll: (salaryIds) => api.post('/hr/payroll/disburse', { salary_ids: salaryIds }),
+    disbursePayroll: (payload) => api.post('/hr/payroll/disburse', Array.isArray(payload) ? { salary_ids: payload } : payload),
     getPayrollSummary: (params) => api.get('/hr/payroll/reports/summary', { params }),
 
     // Performance

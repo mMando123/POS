@@ -27,6 +27,10 @@ const STATUS_COLUMNS = [
 ]
 
 const VEHICLE_ICONS = { motorcycle: '🛵', car: '🚗', bicycle: '🚲', foot: '🚶' }
+const isAwaitingAssignment = (order) => (
+    order?.status === 'handed_to_cashier' &&
+    (!order?.delivery_status || ['pending', 'failed'].includes(order.delivery_status))
+)
 
 function OrderCard({ order, personnel, onAssign, onPickup, onComplete, onFail }) {
     const [expanded, setExpanded] = useState(false)
@@ -87,7 +91,7 @@ function OrderCard({ order, personnel, onAssign, onPickup, onComplete, onFail })
 
             <CardActions sx={{ pt: 0.5, pb: 1, px: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
                 {/* pending: assign rider */}
-                {(!order.delivery_status || order.delivery_status === 'pending') && (
+                {isAwaitingAssignment(order) && (
                     <Button
                         startIcon={<AssignIcon />}
                         size="small" variant="contained" color="warning"
@@ -239,7 +243,7 @@ export default function DeliveryBoard() {
     const handleComplete = async (orderId) => {
         try {
             await deliveryAPI.markComplete(orderId)
-            toast.success('تم تسليم الطلب بنجاح ✅')
+            toast.success('Delivery completed and order closed successfully')
             fetchData()
         } catch (e) {
             toast.error(e.response?.data?.message || 'خطأ')
@@ -267,7 +271,7 @@ export default function DeliveryBoard() {
 
     const getOrdersByStatus = (status) => {
         if (status === 'pending') {
-            return orders.filter(o => !o.delivery_status || o.delivery_status === 'pending')
+            return orders.filter(isAwaitingAssignment)
         }
         return orders.filter(o => o.delivery_status === status)
     }
@@ -293,7 +297,7 @@ export default function DeliveryBoard() {
                 </Box>
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
                     <Chip
-                        label={`${orders.filter(o => !o.delivery_status || o.delivery_status === 'pending').length} بانتظار`}
+                        label={`${orders.filter(isAwaitingAssignment).length} بانتظار`}
                         color="warning" variant="outlined"
                     />
                     <Chip

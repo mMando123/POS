@@ -102,6 +102,13 @@ const SectionTitle = ({ icon, title }) => (
     </Box>
 )
 
+const PAYMENT_GATEWAY_LABELS = {
+    stripe: { ar: 'سترايب', en: 'Stripe' },
+    moyasar: { ar: 'ميسر', en: 'Moyasar' },
+    fawry: { ar: 'فوري', en: 'Fawry' },
+    paymob: { ar: 'باي موب', en: 'Paymob' }
+}
+
 // --- Printer Dialog Component ---
 const PrinterDialog = ({ open, onClose, onSave, printer = null }) => {
     const [formData, setFormData] = useState({ name: '', type: 'network', address: '', location: 'cashier' })
@@ -162,6 +169,7 @@ export default function Settings() {
         workflow: {},
         receipt: {},
         notifications: {},
+        hr: {},
         system: {}
     })
 
@@ -279,6 +287,20 @@ export default function Settings() {
                 setLanguage(value)
             }
         }
+    }
+
+    const handleNestedChange = (section, parentField, field, value) => {
+        setSettings(prev => ({
+            ...prev,
+            [section]: {
+                ...prev[section],
+                [parentField]: {
+                    ...(prev[section]?.[parentField] || {}),
+                    [field]: value
+                }
+            }
+        }))
+        setHasChanges(true)
     }
 
     const handleSave = async () => {
@@ -550,249 +572,53 @@ export default function Settings() {
                                             justifyContent: 'center',
                                             overflow: 'hidden',
                                             position: 'relative',
-                                        } catch (error) {
-                                        console.error(error)
-            toast.error('حدث خطأ أثناء أخذ اللقطة', {id: 'internal-backup' })
-        }
-    }
-
-    const handleRestoreFileChange = (event) => {
-        const file = event.target.files?.[0]
-                                    setRestoreFile(file || null)
-    }
-
-    const handleRestartServerNow = async () => {
-        try {
-                                        toast.loading('\u062c\u0627\u0631\u064a \u0625\u0639\u0627\u062f\u0629 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u062e\u0627\u062f\u0645...', { id: 'restart-server' })
-            await systemAPI.restartServer()
-                                    toast.success('\u062a\u0645 \u0637\u0644\u0628 \u062إ\u0639\u0627\u062f\u0629 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u062e\u0627\u062f\u0645', {id: 'restart-server' })
-            setTimeout(() => {
-                                        window.location.reload()
-                                    }, 5000)
-        } catch (error) {
-                                        console.error(error)
-            toast.error(error?.response?.data?.message || '\u0641\u0634\u0644 \u0637\u0644\u0628 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u062a\u0634\u063a\u064a\u0644', {id: 'restart-server' })
-        }
-    }
-
-    const triggerRestoreFilePicker = () => {
-                                        restoreFileInputRef.current?.click()
-                                    }
-
-    const handleRestoreBackup = async () => {
-        if (!restoreFile) {
-                                        toast.error('\u0627\u062e\u062a\u0631 \u0645\u0644\u0641 \u0646\u0633\u062e\u0629 \u0627\u062d\u062a\u064a\u0627\u0637\u064a\u0629 \u0623\u0648\u0644\u064b\u0627')
-            return
-        }
-
-                                    const confirmResult = await Swal.fire({
-                                        title: '\u062a\u0623\u0643\u064a\u062f \u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a',
-                                    text: '\u0633\u064a\u062a\u0645 \u0627\u0633\u062a\u0628\u062f\u0627\u0644 \u0643\u0644 \u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0628\u0645\u062d\u062a\u0648\u0649 \u0627\u0644\u0646\u0633\u062e\u0629 \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629.',
-                                    icon: 'warning',
-                                    showCancelButton: true,
-                                    confirmButtonColor: '#d33',
-                                    cancelButtonColor: '#3085d6',
-                                    confirmButtonText: '\u0646\u0639\u0645\u060c \u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0627\u0644\u0646\u0633\u062e\u0629',
-                                    cancelButtonText: '\u0625\u0644\u063a\u0627\u0621'
-        })
-
-                                    if (!confirmResult.isConfirmed) return
-
-                                    try {
-                                        setRestoringData(true)
-            const formData = new FormData()
-                                    formData.append('backup_file', restoreFile)
-                                    formData.append('restore_settings', 'true')
-
-                                    toast.loading('\u062c\u0627\u0631\u064a \u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0627\u0644\u0646\u0633\u062e\u0629 \u0627\u0644\u0627\u062d\u062a\u064a\u0627\u0637\u064a\u0629...', {id: 'restore-sys' })
-                                    const response = await systemAPI.restoreData(formData)
-                                    toast.success(response.data?.message || '\u062a\u0645\u062a \u0627\u0644\u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0628\u0646\u062c\u0627\u062d', {id: 'restore-sys' })
-
-                                    setRestoreFile(null)
-                                    if (restoreFileInputRef.current) {
-                                        restoreFileInputRef.current.value = ''
-                                    }
-
-                                    const restartPrompt = await Swal.fire({
-                                        title: '\u062a\u0645\u062a \u0627\u0644\u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0628\u0646\u062c\u0627\u062d',
-                                    text: '\u064a\u064f\u0641\u0636\u0644 \u0625\u0639\u0627\u062f\u0629 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u062e\u0627\u062f\u0645 \u0627\u0644\u0622\u0646 \u0644\u062a\u0637\u0628\u064a\u0642 \u0643\u0627\u0641\u0629 \u0627\u0644\u062a\u063a\u064a\u064a\u0631\u0627\u062a.',
-                                    icon: 'success',
-                                    showCancelButton: true,
-                                    confirmButtonText: '\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0622\u0646',
-                                    cancelButtonText: '\u0644\u0627\u062d\u0642\u064b\u0627'
-            })
-
-                                    if (restartPrompt.isConfirmed) {
-                                        await handleRestartServerNow()
-                                    }
-        } catch (error) {
-                                        console.error(error)
-            toast.error(error?.response?.data?.message || '\u0641\u0634\u0644\u062a \u0639\u0645\u0644\u064a\u0629 \u0627\u0644\u0627\u0633\u062a\u0639\u0627\u062f\u0629', {id: 'restore-sys' })
-        } finally {
-                                        setRestoringData(false)
-                                    }
-    }
-
-    const handleResetSystem = async () => {
-        const confirmResult = await Swal.fire({
-                                        title: 'هل أنت متأكد من مسح جميع البيانات؟',
-                                    text: "هذا الإجراء سيقوم بحذف جميع المبيعات والمنتجات والعملاء بشكل نهائي (Factory Reset). سيتم أخذ نسخة احتياطية خفية قبل المسح للطوارئ.",
-                                    icon: 'warning',
-                                    showCancelButton: true,
-                                    confirmButtonColor: '#d33',
-                                    cancelButtonColor: '#3085d6',
-                                    confirmButtonText: 'نعم، قم بتهيئة النظام',
-                                    cancelButtonText: 'إلغاء'
-        });
-
-                                    if (confirmResult.isConfirmed) {
-            try {
-                                        toast.loading('جاري تهيئة النظام ومسح البيانات...', { id: 'reset-sys' })
-                const response = await systemAPI.resetData({seed_demo_data: false, preserve_uploads: false, preserve_settings: true })
-                                    toast.success(response.data.message || 'تم تهيئة النظام بنجاح', {id: 'reset-sys' })
-                setTimeout(() => window.location.reload(), 2000)
-            } catch (error) {
-                                        console.error(error)
-                toast.error('فشل في عملية تهيئة النظام', {id: 'reset-sys' })
-            }
-        }
-    }
-
-    const handlePrinterSave = (printerData) => {
-                                        let newPrinters = [...(settings.hardware.printers || [])]
-                                    if (editingPrinter) {
-                                        newPrinters = newPrinters.map(p => p.id === editingPrinter.id ? { ...printerData, id: p.id } : p)
-                                    } else {
-                                        newPrinters.push({ ...printerData, id: Date.now() })
-                                    }
-                                    handleChange('hardware', 'printers', newPrinters)
-                                    setPrinterDialogOpen(false)
-                                    setEditingPrinter(null)
-    }
-
-    const handleDeletePrinter = (id) => {
-        const newPrinters = settings.hardware.printers.filter(p => p.id !== id)
-                                    handleChange('hardware', 'printers', newPrinters)
-    }
-
-    const renderSidebarItem = (id, icon, label) => (
-                                    <ListItem
-                                        button
-                                        selected={activeSection === id}
-                                        onClick={() => setActiveSection(id)}
-                                        sx={{
-                                            borderRadius: 2,
-                                            mb: 1,
-                                            bgcolor: activeSection === id ? 'primary.light' : 'transparent',
-                                            color: activeSection === id ? 'primary.contrastText' : 'text.primary',
-                                            '&:hover': { bgcolor: activeSection === id ? 'primary.light' : 'action.hover' }
+                                            bgcolor: 'grey.50'
                                         }}
                                     >
-                                        <Box sx={{ mr: 2, display: 'flex' }}>{icon}</Box>
-                                        <ListItemText primary={label} primaryTypographyProps={{ fontWeight: activeSection === id ? 'bold' : 'medium' }} />
-                                    </ListItem>
-                                    )
-
-                                    if (loading) return <Box sx={{ p: 5, textAlign: 'center' }}><CircularProgress /></Box>
-
-                                    return (
-                                    <Box sx={{ p: 3, maxWidth: 1600, mx: 'auto' }}>
-                                        <SettingsHeader
-                                            title={t('settings.title')}
-                                            subtitle={t('settings.subtitle')}
-                                            onSave={handleSave}
-                                            onReset={fetchSettings} // Simple reset to server state
-                                            hasChanges={hasChanges}
-                                            saving={saving}
+                                        {settings.store.logo ? (
+                                            <>
+                                                <Box
+                                                    component="img"
+                                                    src={settings.store.logo.startsWith('http') ? settings.store.logo : `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/${settings.store.logo.replace(/^\//, '')}`}
+                                                    sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                />
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={() => handleChange('store', 'logo', null)}
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        top: 5,
+                                                        right: 5,
+                                                        bgcolor: 'rgba(255,255,255,0.8)',
+                                                        '&:hover': { bgcolor: 'white' }
+                                                    }}
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            </>
+                                        ) : (
+                                            <StoreIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                                        )}
+                                    </Box>
+                                    <Button
+                                        component="label"
+                                        variant="outlined"
+                                        startIcon={<BackupIcon />}
+                                        size="small"
+                                    >
+                                        ??? ???? ????
+                                        <input
+                                            type="file"
+                                            hidden
+                                            accept="image/*"
+                                            onChange={handleLogoUpload}
                                         />
-
-                                        <Grid container spacing={3}>
-                                            {/* Sidebar Navigation */}
-                                            <Grid item xs={12} md={3}>
-                                                <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', height: '100%', borderRadius: 3 }}>
-                                                    <List component="nav">
-                                                        {renderSidebarItem('store', <StoreIcon />, t('settings.storeInfo'))}
-                                                        {renderSidebarItem('hardware', <HardwareIcon />, t('settings.hardware'))}
-                                                        {renderSidebarItem('workflow', <TuneIcon />, t('settings.workflow'))}
-                                                        {renderSidebarItem('receipt', <ReceiptIcon />, t('settings.invoices'))}
-                                                        {renderSidebarItem('payment', <CreditCardIcon />, t('settings.paymentGateways'))}
-                                                        {renderSidebarItem('notifications', <NotificationsIcon />, t('settings.notifications'))}
-                                                        {renderSidebarItem('system', <SettingsIcon />, t('settings.systemConfig'))}
-                                                        {renderSidebarItem('data', <StorageIcon />, t('settings.dataManagement'))}
-                                                    </List>
-                                                </Paper>
-                                            </Grid>
-
-                                            {/* Content Area */}
-                                            <Grid item xs={12} md={9}>
-                                                <Paper elevation={0} sx={{ p: 4, border: '1px solid', borderColor: 'divider', minHeight: 600, borderRadius: 3 }}>
-
-                                                    {/* Store Section */}
-                                                    {activeSection === 'store' && (
-                                                        <Box className="animate-fade-in">
-                                                            <SectionTitle icon={<StoreIcon />} title={t('settings.storeInfo')} />
-
-                                                            <Box sx={{ mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                                                <Box
-                                                                    sx={{
-                                                                        width: 120,
-                                                                        height: 120,
-                                                                        borderRadius: 2,
-                                                                        border: '2px dashed',
-                                                                        borderColor: 'divider',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        overflow: 'hidden',
-                                                                        position: 'relative',
-                                                                        bgcolor: 'grey.50'
-                                                                    }}
-                                                                >
-                                                                    {settings.store.logo ? (
-                                                                        <>
-                                                                            <Box
-                                                                                component="img"
-                                                                                src={settings.store.logo.startsWith('http') ? settings.store.logo : `${(import.meta.env.VITE_API_URL || '').replace(/\/$/, '')}/${settings.store.logo.replace(/^\//, '')}`}
-                                                                                sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                                            />
-                                                                            <IconButton
-                                                                                size="small"
-                                                                                color="error"
-                                                                                onClick={() => handleChange('store', 'logo', null)}
-                                                                                sx={{
-                                                                                    position: 'absolute',
-                                                                                    top: 5,
-                                                                                    right: 5,
-                                                                                    bgcolor: 'rgba(255,255,255,0.8)',
-                                                                                    '&:hover': { bgcolor: 'white' }
-                                                                                }}
-                                                                            >
-                                                                                <DeleteIcon fontSize="small" />
-                                                                            </IconButton>
-                                                                        </>
-                                                                    ) : (
-                                                                        <StoreIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
-                                                                    )}
-                                                                </Box>
-                                                                <Button
-                                                                    component="label"
-                                                                    variant="outlined"
-                                                                    startIcon={<BackupIcon />}
-                                                                    size="small"
-                                                                >
-                                                                    رفع شعار جديد
-                                                                    <input
-                                                                        type="file"
-                                                                        hidden
-                                                                        accept="image/*"
-                                                                        onChange={handleLogoUpload}
-                                                                    />
-                                                                </Button>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    يُفضل استخدام صورة مربعة بخلفية شفافة (PNG)
-                                                                </Typography>
-                                                            </Box>
-
+                                    </Button>
+                                    <Typography variant="caption" color="text.secondary">
+                                        ????? ??????? ???? ????? ?????? ????? (PNG)
+                                    </Typography>
+                                </Box>
                                                             <Grid container spacing={3}>
                                                                 <Grid item xs={12} md={6}>
                                                                     <TextField fullWidth label={t('settings.storeName')} required error={!settings.store.storeName} value={settings.store.storeName} onChange={e => handleChange('store', 'storeName', e.target.value)} />
@@ -1141,6 +967,74 @@ export default function Settings() {
                                                                         <MenuItem value="dark">{t('settings.dark')}</MenuItem>
                                                                     </TextField>
                                                                 </Grid>
+                                                                <Grid item xs={12}>
+                                                                    <Card variant="outlined" sx={{ mt: 1 }}>
+                                                                        <CardContent>
+                                                                            <Typography variant="h6" fontWeight="bold" gutterBottom>
+                                                                                سياسة خصم التأخير للرواتب
+                                                                            </Typography>
+                                                                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                                                                                يتم تطبيق هذه السياسة عند معالجة الرواتب. التأخيرات ضمن السماح لا يترتب عليها خصم.
+                                                                            </Typography>
+                                                                            <Grid container spacing={2}>
+                                                                                <Grid item xs={12}>
+                                                                                    <FormControlLabel
+                                                                                        control={(
+                                                                                            <Switch
+                                                                                                checked={settings.hr?.payrollLatePolicy?.enabled === true}
+                                                                                                onChange={e => handleNestedChange('hr', 'payrollLatePolicy', 'enabled', e.target.checked)}
+                                                                                            />
+                                                                                        )}
+                                                                                        label="تفعيل خصم التأخير التلقائي"
+                                                                                    />
+                                                                                </Grid>
+                                                                                <Grid item xs={12} md={4}>
+                                                                                    <TextField
+                                                                                        fullWidth
+                                                                                        type="number"
+                                                                                        label="عدد مرات السماح"
+                                                                                        inputProps={{ min: 0, max: 31 }}
+                                                                                        value={settings.hr?.payrollLatePolicy?.graceCount ?? 0}
+                                                                                        onChange={e => handleNestedChange('hr', 'payrollLatePolicy', 'graceCount', Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
+                                                                                        helperText="عدد مرات التأخير المسموح بها قبل بدء الخصم"
+                                                                                    />
+                                                                                </Grid>
+                                                                                <Grid item xs={12} md={4}>
+                                                                                    <TextField
+                                                                                        select
+                                                                                        fullWidth
+                                                                                        label="نوع الخصم"
+                                                                                        value={settings.hr?.payrollLatePolicy?.deductionType || 'fixed_amount'}
+                                                                                        onChange={e => handleNestedChange('hr', 'payrollLatePolicy', 'deductionType', e.target.value)}
+                                                                                        disabled={settings.hr?.payrollLatePolicy?.enabled !== true}
+                                                                                    >
+                                                                                        <MenuItem value="fixed_amount">مبلغ ثابت لكل مرة</MenuItem>
+                                                                                        <MenuItem value="fraction_of_day">نسبة من أجر اليوم</MenuItem>
+                                                                                    </TextField>
+                                                                                </Grid>
+                                                                                <Grid item xs={12} md={4}>
+                                                                                    <TextField
+                                                                                        fullWidth
+                                                                                        type="number"
+                                                                                        label={settings.hr?.payrollLatePolicy?.deductionType === 'fraction_of_day' ? 'قيمة النسبة من اليوم' : 'قيمة الخصم'}
+                                                                                        inputProps={{
+                                                                                            min: 0,
+                                                                                            step: settings.hr?.payrollLatePolicy?.deductionType === 'fraction_of_day' ? 0.05 : 1
+                                                                                        }}
+                                                                                        value={settings.hr?.payrollLatePolicy?.deductionValue ?? 0}
+                                                                                        onChange={e => handleNestedChange('hr', 'payrollLatePolicy', 'deductionValue', Math.max(0, parseFloat(e.target.value || '0') || 0))}
+                                                                                        disabled={settings.hr?.payrollLatePolicy?.enabled !== true}
+                                                                                        helperText={
+                                                                                            settings.hr?.payrollLatePolicy?.deductionType === 'fraction_of_day'
+                                                                                                ? 'مثال: 0.25 يعني ربع أجر يوم لكل تأخير بعد السماح'
+                                                                                                : 'يخصم هذا المبلغ عن كل تأخير زائد عن حد السماح'
+                                                                                        }
+                                                                                    />
+                                                                                </Grid>
+                                                                            </Grid>
+                                                                        </CardContent>
+                                                                    </Card>
+                                                                </Grid>
                                                             </Grid>
                                                         </Box>
                                                     )}
@@ -1227,7 +1121,12 @@ export default function Settings() {
                                                             </Alert>
 
                                                             <Grid container spacing={3}>
-                                                                {paymentGateways.map(gateway => (
+                                                                {paymentGateways.map(gateway => {
+                                                                    const labels = PAYMENT_GATEWAY_LABELS[gateway.name] || {}
+                                                                    const displayNameAr = labels.ar || gateway.display_name_ar
+                                                                    const displayNameEn = labels.en || gateway.display_name_en
+
+                                                                    return (
                                                                     <Grid item xs={12} md={6} key={gateway.id}>
                                                                         <Card variant="outlined" sx={{ position: 'relative', overflow: 'visible' }}>
                                                                             {gateway.is_active && (
@@ -1236,7 +1135,7 @@ export default function Settings() {
                                                                             <CardContent>
                                                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                                        <Typography variant="h6">{gateway.display_name_en} ({gateway.display_name_ar})</Typography>
+                                                                                        <Typography variant="h6">{displayNameEn} ({displayNameAr})</Typography>
                                                                                     </Box>
                                                                                     <Switch
                                                                                         checked={gateway.is_active}
@@ -1328,7 +1227,8 @@ export default function Settings() {
                                                                             </CardContent>
                                                                         </Card>
                                                                     </Grid>
-                                                                ))}
+                                                                    )
+                                                                })}
                                                             </Grid>
                                                         </Box>
                                                     )}
