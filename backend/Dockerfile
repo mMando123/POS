@@ -10,7 +10,6 @@ RUN npm install --omit=dev
 
 # Copy source code
 COPY src/ ./src/
-COPY data/ ./data/ 2>/dev/null || true
 
 # Create required directories
 RUN mkdir -p uploads data logs backups exports
