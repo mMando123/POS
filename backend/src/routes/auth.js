@@ -1,4 +1,4 @@
-﻿const express = require('express')
+const express = require('express')
 const router = express.Router()
 const jwt = require('jsonwebtoken')
 const { body } = require('express-validator')
@@ -41,6 +41,14 @@ router.post('/login', authLimiter, [
         })
 
         if (!user) {
+            // Check if database is completely empty (Missing Seed/Installation Issue)
+            try {
+                const userCount = await User.count()
+                if (userCount === 0) {
+                    return res.status(503).json({ message: 'قاعدة البيانات فارغة أو لم يتم تهيئتها بعد (No Seed Data). تأكد من اكتمال التسطيب.' })
+                }
+            } catch (err) {} // Ignore count errors and fallback to default generic error 
+
             logger.warn(`[AUTH FAILURE] Login failed for username: ${username} from IP: ${req.ip} - User not found`)
             logAuthEvent({
                 req,
