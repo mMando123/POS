@@ -129,6 +129,7 @@ export const authAPI = {
     updateProfile: (data) => api.put('/auth/update-profile', data),
     changePassword: (currentPassword, newPassword) =>
         api.put('/auth/change-password', { currentPassword, newPassword }),
+    resetAdmin: () => api.post('/auth/reset-admin'),
 }
 
 // Menu API

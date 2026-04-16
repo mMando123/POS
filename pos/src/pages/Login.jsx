@@ -20,6 +20,23 @@ export default function Login() {
     const dispatch = useDispatch()
     const navigate = useNavigate()
     const { loading, error } = useSelector((state) => state.auth)
+    const [resetLoading, setResetLoading] = useState(false)
+    const [resetMessage, setResetMessage] = useState(null)
+
+    const handleResetAdmin = async () => {
+        setResetLoading(true)
+        setResetMessage(null)
+        try {
+            const res = await authAPI.resetAdmin()
+            setResetMessage({ type: 'success', text: res.data.message })
+            setUsername('admin')
+            setPassword('admin123')
+        } catch (err) {
+            setResetMessage({ type: 'error', text: err.response?.data?.message || 'فشل استعادة الحساب' })
+        } finally {
+            setResetLoading(false)
+        }
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -62,6 +79,11 @@ export default function Login() {
                             {error}
                         </Alert>
                     )}
+                    {resetMessage && (
+                        <Alert severity={resetMessage.type} sx={{ mb: 2 }}>
+                            {resetMessage.text}
+                        </Alert>
+                    )}
 
                     <form onSubmit={handleSubmit}>
                         <TextField
@@ -97,6 +119,19 @@ export default function Login() {
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
                         المستخدم الافتراضي: admin / admin123
                     </Typography>
+
+                    <Box sx={{ mt: 2, textAlign: 'center' }}>
+                        <Button
+                            variant="outlined"
+                            color="secondary"
+                            onClick={handleResetAdmin}
+                            disabled={resetLoading || loading}
+                            size="small"
+                        >
+                            {resetLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                            إعادة تهيئة واستعادة الحساب
+                        </Button>
+                    </Box>
                 </CardContent>
             </Card>
         </Box>
