@@ -44,10 +44,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-string-in-production}
       JWT_EXPIRES_IN: 12h
       REFRESH_TOKEN_EXPIRES_DAYS: 7
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost,http://localhost:80,http://localhost:3000,http://localhost:3002,http://localhost:3003}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost,http://localhost:80,http://localhost:8080,http://localhost:3000,http://localhost:3002,http://localhost:3003}
       ACCOUNTING_STRICT_DEFAULTS: "true"
       ACCOUNTING_AUTO_REMAP_POSTING: "false"
       ACCOUNTING_ALLOW_GLOBAL_FALLBACK: "false"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http');h.get('http://localhost:3001/api/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     volumes:
       - backend_uploads:/app/uploads
       - backend_data:/app/data
@@ -66,7 +72,8 @@ services:
     ports:
       - "3002:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   # ============ Website (Customer Ordering) ============
   website:
@@ -80,7 +87,8 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   # ============ KDS (Kitchen Display) ============
   kds:
@@ -94,7 +102,8 @@ services:
     ports:
       - "3003:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   # ============ Nginx Reverse Proxy ============
   nginx:
@@ -105,10 +114,14 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - backend
-      - pos
-      - website
-      - kds
+      backend:
+        condition: service_healthy
+      pos:
+        condition: service_started
+      website:
+        condition: service_started
+      kds:
+        condition: service_started
 
 volumes:
   mysql_data:
