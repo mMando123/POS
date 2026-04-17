@@ -8,7 +8,7 @@
 # الاستخدام:
 #   chmod +x setup.sh && sudo ./setup.sh
 #
-# يعمل على: Ubuntu 22.04 / 24.04
+# يعمل على: Ubuntu 22.04 / 24.04 (VPS أو WSL2)
 #
 
 set -e
@@ -18,6 +18,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 print_header() {
@@ -40,6 +41,10 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+print_info() {
+    echo -e "${CYAN}ℹ️  $1${NC}"
+}
+
 # ============ Check Root ============
 if [ "$EUID" -ne 0 ]; then
     print_error "يجب تشغيل السكريبت بصلاحيات root"
@@ -47,7 +52,19 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# ============ Detect environment ============
+IS_WSL=false
+if grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+    IS_WSL=true
+fi
+
 print_header "🚀 بدء تثبيت نظام زمام POS"
+
+if [ "$IS_WSL" = true ]; then
+    print_info "تم اكتشاف بيئة WSL2"
+else
+    print_info "تم اكتشاف بيئة Linux/VPS"
+fi
 
 # ============ Method Selection ============
 echo "اختر طريقة التثبيت:"
@@ -58,35 +75,133 @@ echo ""
 read -p "اختيارك [1/2]: " INSTALL_METHOD
 INSTALL_METHOD=${INSTALL_METHOD:-1}
 
+# ============================================================
+#  Function: Install Docker Engine inside Linux/WSL
+# ============================================================
+install_docker_engine() {
+    print_step "تثبيت Docker Engine..."
+
+    # Remove old/broken docker packages
+    apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+
+    # Install prerequisites
+    apt-get update -y
+    apt-get install -y ca-certificates curl gnupg lsb-release
+
+    # Add Docker official GPG key
+    install -m 0755 -d /etc/apt/keyrings
+    if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+    fi
+
+    # Set up Docker repository
+    UBUNTU_CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME" 2>/dev/null || echo "jammy")
+    echo \
+        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+        $UBUNTU_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Install Docker Engine
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    print_success "تم تثبيت Docker Engine"
+}
+
+# ============================================================
+#  Function: Ensure Docker daemon is running
+# ============================================================
+ensure_docker_running() {
+    print_step "التأكد من تشغيل Docker daemon..."
+
+    # Try systemctl first (works on real VPS and some WSL setups)
+    if command -v systemctl &>/dev/null && systemctl is-system-running &>/dev/null 2>&1; then
+        systemctl enable docker 2>/dev/null || true
+        systemctl start docker 2>/dev/null || true
+    fi
+
+    # Check if Docker is actually responding
+    if docker info &>/dev/null 2>&1; then
+        print_success "Docker daemon يعمل"
+        return 0
+    fi
+
+    # If systemctl didn't work (common in WSL), start dockerd manually
+    if [ "$IS_WSL" = true ]; then
+        print_info "بيئة WSL: تشغيل Docker daemon يدوياً..."
+        
+        # Start dockerd in background
+        nohup dockerd > /var/log/dockerd.log 2>&1 &
+        DOCKERD_PID=$!
+        
+        # Wait for Docker to be ready
+        echo -n "  انتظار Docker..."
+        for i in $(seq 1 20); do
+            if docker info &>/dev/null 2>&1; then
+                echo ""
+                print_success "Docker daemon يعمل (PID: $DOCKERD_PID)"
+                return 0
+            fi
+            echo -n "."
+            sleep 2
+        done
+        echo ""
+        print_error "فشل تشغيل Docker daemon!"
+        echo "السجلات:"
+        tail -20 /var/log/dockerd.log 2>/dev/null || true
+        exit 1
+    else
+        # Real Linux - try service command
+        service docker start 2>/dev/null || true
+        sleep 3
+        if docker info &>/dev/null 2>&1; then
+            print_success "Docker daemon يعمل"
+            return 0
+        fi
+        print_error "فشل تشغيل Docker daemon!"
+        exit 1
+    fi
+}
+
+# ============================================================
+#  Function: Verify Docker actually works (not just a shim)
+# ============================================================
+docker_works() {
+    # Check if docker command exists AND actually responds
+    if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
 if [ "$INSTALL_METHOD" = "1" ]; then
     # ============================================
     #           DOCKER INSTALLATION
     # ============================================
     print_header "📦 تثبيت عبر Docker"
 
-    # Install Docker
-    print_step "تثبيت Docker..."
-    if command -v docker &> /dev/null; then
-        print_success "Docker موجود بالفعل"
+    # ---- Step 1: Install Docker if needed ----
+    if docker_works; then
+        print_success "Docker يعمل بالفعل ($(docker --version))"
     else
-        curl -fsSL https://get.docker.com | sh
-        systemctl enable docker
-        systemctl start docker
-        print_success "تم تثبيت Docker"
+        print_info "Docker غير مثبت أو لا يعمل - سيتم التثبيت الآن..."
+        install_docker_engine
+        ensure_docker_running
     fi
 
-    # Install Docker Compose
-    print_step "تثبيت Docker Compose..."
-    if command -v docker compose &> /dev/null; then
-        print_success "Docker Compose موجود بالفعل"
+    # ---- Step 2: Verify docker compose ----
+    print_step "التحقق من Docker Compose..."
+    if docker compose version &>/dev/null 2>&1; then
+        print_success "Docker Compose جاهز ($(docker compose version --short))"
     else
+        print_error "Docker Compose غير متوفر!"
         apt-get install -y docker-compose-plugin
         print_success "تم تثبيت Docker Compose"
     fi
 
-    # Create .env file if not exists
+    # ---- Step 3: Create .env file ----
+    print_step "إنشاء ملف الإعدادات .env..."
     if [ ! -f .env ]; then
-        print_step "إنشاء ملف الإعدادات .env..."
         JWT_SECRET=$(openssl rand -hex 64)
         cat > .env << EOF
 # ===== Zimam POS Configuration =====
@@ -99,7 +214,7 @@ DB_PASSWORD=Zimam2026Secure!
 JWT_SECRET=${JWT_SECRET}
 
 # CORS (add your domain)
-CORS_ORIGIN=http://localhost,http://localhost:80,http://localhost:3000,http://localhost:3002,http://localhost:3003
+CORS_ORIGIN=http://localhost,http://localhost:80,http://localhost:8080,http://localhost:3000,http://localhost:3002,http://localhost:3003
 
 # API URLs (leave as /api for Docker setup)
 POS_API_URL=/api
@@ -107,26 +222,174 @@ WEBSITE_API_URL=/api
 KDS_API_URL=/api
 EOF
         print_success "تم إنشاء .env"
+    else
+        print_info ".env موجود بالفعل - لن يتم تعديله"
     fi
 
-    # Build and start all services
-    print_step "بناء وتشغيل الخدمات..."
-    docker compose build --no-cache
+    # ---- Step 4: Stop old containers ----
+    print_step "إيقاف أي حاويات قديمة..."
+    docker compose down --remove-orphans 2>/dev/null || true
+
+    # ---- Step 5: Build all services ----
+    print_step "بناء جميع الخدمات (قد يستغرق عدة دقائق)..."
+    if docker compose build --no-cache; then
+        print_success "تم بناء جميع الخدمات"
+    else
+        print_error "فشل بناء الخدمات! تحقق من الأخطاء أعلاه"
+        exit 1
+    fi
+
+    # ---- Step 6: Start database first ----
+    print_step "تشغيل قاعدة البيانات..."
+    docker compose up -d db
+
+    echo -n "  انتظار جاهزية MySQL..."
+    DB_READY=false
+    for i in $(seq 1 30); do
+        if docker compose exec -T db mysqladmin ping -h localhost -u root -pZimam2026Secure! --silent 2>/dev/null; then
+            DB_READY=true
+            echo ""
+            break
+        fi
+        echo -n "."
+        sleep 2
+    done
+
+    if [ "$DB_READY" = true ]; then
+        print_success "قاعدة البيانات جاهزة"
+    else
+        print_error "قاعدة البيانات لم تستجب بعد 60 ثانية!"
+        echo "السجلات:"
+        docker compose logs db --tail 20
+        exit 1
+    fi
+
+    # ---- Step 7: Start backend ----
+    print_step "تشغيل الـ Backend..."
+    docker compose up -d backend
+
+    echo ""
+    echo -e "${CYAN}  انتظار بدء تشغيل الـ Backend (30-60 ثانية)...${NC}"
+    echo ""
+
+    BACKEND_OK=false
+    for i in $(seq 1 40); do
+        # Check if container crashed
+        STATUS=$(docker compose ps backend --format '{{.Status}}' 2>/dev/null || echo "unknown")
+
+        if echo "$STATUS" | grep -qi "exit\|dead"; then
+            echo ""
+            print_error "الـ Backend انهار! السجلات:"
+            echo -e "${RED}─────────────────────────────────────────────────${NC}"
+            docker compose logs backend --tail 40
+            echo -e "${RED}─────────────────────────────────────────────────${NC}"
+            exit 1
+        fi
+
+        # Check health endpoint
+        if docker compose exec -T backend node -e "
+            const h = require('http');
+            h.get('http://localhost:3001/api/health', (r) => {
+                process.exit(r.statusCode === 200 ? 0 : 1);
+            }).on('error', () => process.exit(1));
+        " 2>/dev/null; then
+            BACKEND_OK=true
+            break
+        fi
+
+        echo -ne "\r  ⏳ محاولة $i/40..."
+        sleep 3
+    done
+
+    echo ""
+
+    if [ "$BACKEND_OK" = true ]; then
+        print_success "الـ Backend يعمل بنجاح! 🎉"
+    else
+        print_error "الـ Backend لم يستجب! السجلات:"
+        echo -e "${RED}─────────────────────────────────────────────────${NC}"
+        docker compose logs backend --tail 50
+        echo -e "${RED}─────────────────────────────────────────────────${NC}"
+        exit 1
+    fi
+
+    # ---- Step 8: Start everything else ----
+    print_step "تشغيل باقي الخدمات (POS, Website, KDS, Nginx)..."
     docker compose up -d
 
-    print_header "✅ تم التثبيت بنجاح!"
+    sleep 5
+
+    # ---- Step 9: Final check ----
+    print_step "فحص نهائي لجميع الخدمات..."
     echo ""
-    echo -e "  🖥️  POS (الكاشير):     ${GREEN}http://localhost:3002${NC}"
-    echo -e "  🌍 الموقع:             ${GREEN}http://localhost:3000${NC}"
-    echo -e "  🍳 شاشة المطبخ:        ${GREEN}http://localhost:3003${NC}"
-    echo -e "  ⚙️  API:               ${GREEN}http://localhost:3001${NC}"
-    echo -e "  🔗 الكل عبر Nginx:     ${GREEN}http://localhost${NC}"
+
+    SERVICES=("db" "backend" "pos" "website" "kds" "nginx")
+    ALL_OK=true
+
+    for svc in "${SERVICES[@]}"; do
+        STATUS=$(docker compose ps "$svc" --format '{{.Status}}' 2>/dev/null || echo "not found")
+        if echo "$STATUS" | grep -qi "up\|running\|healthy"; then
+            print_success "$svc: يعمل ✓"
+        else
+            print_error "$svc: $STATUS"
+            ALL_OK=false
+        fi
+    done
+
+    # ---- Step 10: Test API ----
+    echo ""
+    print_step "اختبار اتصال API..."
+    if docker compose exec -T backend node -e "
+        const h = require('http');
+        h.get('http://localhost:3001/api/health', (r) => {
+            let d = '';
+            r.on('data', c => d += c);
+            r.on('end', () => { console.log('  API Response:', d); process.exit(0); });
+        }).on('error', (e) => { console.log('  Error:', e.message); process.exit(1); });
+    " 2>/dev/null; then
+        print_success "Backend API يستجيب بنجاح"
+    else
+        print_error "Backend API لا يستجيب!"
+        ALL_OK=false
+    fi
+
+    # ---- Summary ----
+    echo ""
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+
+    if [ "$ALL_OK" = true ]; then
+        echo -e "${GREEN}"
+        echo "  ╔══════════════════════════════════════════════════╗"
+        echo "  ║       🎉 تم التثبيت والتشغيل بنجاح! 🎉          ║"
+        echo "  ╠══════════════════════════════════════════════════╣"
+        echo "  ║                                                  ║"
+        echo "  ║  🖥️  POS:     http://$SERVER_IP:8080              "
+        echo "  ║  🌐 Website: http://$SERVER_IP:8080/menu          "
+        echo "  ║  🍳 KDS:     http://$SERVER_IP:8080/kitchen       "
+        echo "  ║  📡 API:     http://$SERVER_IP:3001/api            "
+        echo "  ║                                                  ║"
+        echo "  ║  بيانات الدخول: admin / admin123                 ║"
+        echo "  ║                                                  ║"
+        echo "  ╚══════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+    else
+        echo -e "${YELLOW}"
+        echo "  ╔══════════════════════════════════════════════════╗"
+        echo "  ║   ⚠️  بعض الخدمات لم تبدأ بشكل صحيح             ║"
+        echo "  ╠══════════════════════════════════════════════════╣"
+        echo "  ║  لعرض السجلات:                                   ║"
+        echo "  ║  docker compose logs backend --tail 50           ║"
+        echo "  ║  docker compose logs nginx --tail 20             ║"
+        echo "  ╚══════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+    fi
+
     echo ""
     echo "أوامر مفيدة:"
-    echo "  docker compose logs -f        # عرض اللوقات"
-    echo "  docker compose restart        # إعادة تشغيل"
-    echo "  docker compose down           # إيقاف الكل"
-    echo "  docker compose up -d --build  # إعادة بناء وتشغيل"
+    echo "  docker compose logs -f backend  # عرض سجلات الباك إند مباشرة"
+    echo "  docker compose restart          # إعادة تشغيل الكل"
+    echo "  docker compose down             # إيقاف الكل"
+    echo "  ./deploy.sh                     # إعادة بناء وتشغيل ذكي"
 
 else
     # ============================================
@@ -211,7 +474,7 @@ EOF
 
     # ---- Install Dependencies ----
     print_step "تثبيت المكتبات..."
-    cd "$PROJECT_DIR" && npm install
+    cd "$PROJECT_DIR/backend" && npm install
     cd "$PROJECT_DIR/pos" && npm install
     cd "$PROJECT_DIR/website" && npm install
     cd "$PROJECT_DIR/kds" && npm install
